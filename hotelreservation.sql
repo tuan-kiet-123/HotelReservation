@@ -44,7 +44,7 @@ CREATE TABLE `Payment` (
   `PaymentType` varchar(50) NOT NULL,
   `Amount` decimal(18,2) NOT NULL,
   `PaymentDate` datetime DEFAULT current_timestamp(),
-  `Status` varchar(50)
+  `Status` varchar(50) DEFAULT 'Pending'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
@@ -87,7 +87,7 @@ CREATE TABLE `Reservation` (
   `UserId` varchar(10),
   `CheckInDate` datetime NOT NULL,
   `CheckOutDate` datetime NOT NULL,
-  `Status` varchar(20)
+  `Status` varchar(20) DEFAULT 'Pending'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
@@ -106,72 +106,59 @@ CREATE TABLE `Room` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
--- Chỉ mục cho các bảng đã đổ
---
-
-
---
 -- Chỉ mục cho bảng `payment`
---
-ALTER TABLE `payment`
+-- Ràng buộc cho bảng 'payment'
+ALTER TABLE `Payment`
   ADD KEY `fk_Payment_Reservation` (`ReservationId`);
+  ADD CONSTRAINT `fk_Payment_Reservation` FOREIGN KEY (`ReservationId`) REFERENCES `Reservation` (`ReservationId`);
+  ADD CONSTRAINT `chk_Payment_Amount` CHECK (`Amount` >= 0);
 
 --
 -- Chỉ mục cho bảng `pricechangelog`
---
-ALTER TABLE `pricechangelog`
+-- Ràng buộc cho bảng 'pricechangelog'
+ALTER TABLE `PriceChangeLog`
   ADD KEY `fk_PriceChangeLog_Room` (`RoomId`);
+  ADD CONSTRAINT `fk_PriceChangeLog_Room` FOREIGN KEY (`RoomId`) REFERENCES `Room` (`RoomId`);
 
 --
 -- Chỉ mục cho bảng `refund`
---
-ALTER TABLE `refund`
+-- Ràng buộc cho bảng 'refund'
+ALTER TABLE `Refund`
   ADD KEY `fk_Refund_Reservation` (`ReservationId`);
+  ADD CONSTRAINT `fk_Refund_Reservation` FOREIGN KEY (`ReservationId`) REFERENCES `Reservation` (`ReservationId`);
+  ADD CONSTRAINT `chk_Refund_Amount` CHECK (`RefundAmount` >= 0 AND `PenaltyAmount` >= 0);
 
 --
 -- Chỉ mục cho bảng `reservation`
---
-ALTER TABLE `reservation`
+-- Ràng buộc cho bảng 'reservation'
+ALTER TABLE `Reservation`
   ADD KEY `fk_Reservation_Room` (`RoomId`);
+  ADD CONSTRAINT `fk_Reservation_Room` FOREIGN KEY (`RoomId`) REFERENCES `Room` (`RoomId`);
+  ADD CONSTRAINT `chk_Reservation_Dates` CHECK (`CheckOutDate` > `CheckInDate`);
 
 --
 -- Chỉ mục cho bảng `room`
---
-ALTER TABLE `room`
+-- Ràng buộc cho bảng 'room'
+ALTER TABLE `Room`
   ADD KEY `fk_Hotel_Room` (`HotelId`);
+  ADD CONSTRAINT `fk_Hotel_Room` FOREIGN KEY (`HotelId`) REFERENCES `Hotel` (`HotelId`);
+  ADD CONSTRAINT `chk_Room_Price` CHECK (`BasePrice` >= 0 AND `CurrentPrice` >= 0);
 
 --
--- Các ràng buộc cho các bảng đã đổ
---
+-- Ràng buộc cho bảng 'FinancialLedger'
+ALTER TABLE `FinancialLedger`
+  ADD CONSTRAINT `chk_Ledger_Amount` CHECK (`DebitAmount` >= 0 AND `CreditAmount` >= 0);
 
---
--- Các ràng buộc cho bảng `payment`
---
-ALTER TABLE `payment`
-  ADD CONSTRAINT `fk_Payment_Reservation` FOREIGN KEY (`ReservationId`) REFERENCES `reservation` (`ReservationId`);
 
---
--- Các ràng buộc cho bảng `pricechangelog`
---
-ALTER TABLE `pricechangelog`
-  ADD CONSTRAINT `fk_PriceChangeLog_Room` FOREIGN KEY (`RoomId`) REFERENCES `room` (`RoomId`);
+-- Index trên UserId: Dùng để truy vấn lịch sử đặt phòng của một khách hàng cực nhanh
+CREATE INDEX `idx_Reservation_UserId` ON `Reservation` (`UserId`);
 
---
--- Các ràng buộc cho bảng `refund`
---
-ALTER TABLE `refund`
-  ADD CONSTRAINT `fk_Refund_Reservation` FOREIGN KEY (`ReservationId`) REFERENCES `reservation` (`ReservationId`);
+-- Index trên ReferenceId: Tối ưu khi Kế toán cần JOIN ngược từ Sổ cái về Payment/Refund
+CREATE INDEX `idx_Ledger_ReferenceId` ON `FinancialLedger` (`ReferenceId`);
 
---
--- Các ràng buộc cho bảng `reservation`
---
-ALTER TABLE `reservation`
-  ADD CONSTRAINT `fk_Reservation_Room` FOREIGN KEY (`RoomId`) REFERENCES `room` (`RoomId`);
+-- Index trên Status của Reservation: Tối ưu khi lọc các phòng đang 'Pending' hoặc 'Completed'
+CREATE INDEX `idx_Reservation_Status` ON `Reservation` (`Status`);
 
---
--- Các ràng buộc cho bảng `room`
---
-ALTER TABLE `room`
-  ADD CONSTRAINT `fk_Hotel_Room` FOREIGN KEY (`HotelId`) REFERENCES `hotel` (`HotelId`);
+
 COMMIT;
 
