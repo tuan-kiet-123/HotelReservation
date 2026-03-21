@@ -100,6 +100,7 @@ CREATE TABLE `Room` (
   `RoomId` varchar(10) NOT NULL Primary Key,
   `HotelId` varchar(10) NOT NULL,
   `RoomType` varchar(100),
+  `BasePrice` decimal(18,2) NOT NULL,
   `CurrentPrice` decimal(18,2),
   `Status` tinyint(1) DEFAULT 1
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
