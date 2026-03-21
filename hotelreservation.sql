@@ -15,6 +15,7 @@ SET time_zone = "+00:00";
 CREATE TABLE `FinancialLedger` (
   `LedgerId` varchar(10) NOT NULL Primary Key,
   `ReferenceId` varchar(10) NOT NULL,
+  `EventType` varchar(50) NOT NULL,
   `DebitAmount` decimal(18,2),
   `CreditAmount` decimal(18,2),
   `Date` datetime DEFAULT current_timestamp()
@@ -109,39 +110,57 @@ CREATE TABLE `Room` (
 -- Chỉ mục cho bảng `payment`
 -- Ràng buộc cho bảng 'payment'
 ALTER TABLE `Payment`
-  ADD KEY `fk_Payment_Reservation` (`ReservationId`);
+  ADD INDEX `idx_Payment_ReservationId` (`ReservationId`);
+
+ALTER TABLE `Payment`
   ADD CONSTRAINT `fk_Payment_Reservation` FOREIGN KEY (`ReservationId`) REFERENCES `Reservation` (`ReservationId`);
+
+ALTER TABLE `Payment`
   ADD CONSTRAINT `chk_Payment_Amount` CHECK (`Amount` >= 0);
 
 --
 -- Chỉ mục cho bảng `pricechangelog`
 -- Ràng buộc cho bảng 'pricechangelog'
 ALTER TABLE `PriceChangeLog`
-  ADD KEY `fk_PriceChangeLog_Room` (`RoomId`);
+  ADD INDEX `idx_PriceChangeLog_RoomId` (`RoomId`);
+
+ALTER TABLE `PriceChangeLog`
   ADD CONSTRAINT `fk_PriceChangeLog_Room` FOREIGN KEY (`RoomId`) REFERENCES `Room` (`RoomId`);
 
 --
 -- Chỉ mục cho bảng `refund`
 -- Ràng buộc cho bảng 'refund'
 ALTER TABLE `Refund`
-  ADD KEY `fk_Refund_Reservation` (`ReservationId`);
+  ADD INDEX `idx_Refund_ReservationId` (`ReservationId`);
+
+ALTER TABLE `Refund`
   ADD CONSTRAINT `fk_Refund_Reservation` FOREIGN KEY (`ReservationId`) REFERENCES `Reservation` (`ReservationId`);
+
+ALTER TABLE `Refund`
   ADD CONSTRAINT `chk_Refund_Amount` CHECK (`RefundAmount` >= 0 AND `PenaltyAmount` >= 0);
 
 --
 -- Chỉ mục cho bảng `reservation`
 -- Ràng buộc cho bảng 'reservation'
 ALTER TABLE `Reservation`
-  ADD KEY `fk_Reservation_Room` (`RoomId`);
+  ADD INDEX `idx_Reservation_RoomId` (`RoomId`);
+
+ALTER TABLE `Reservation`
   ADD CONSTRAINT `fk_Reservation_Room` FOREIGN KEY (`RoomId`) REFERENCES `Room` (`RoomId`);
+
+ALTER TABLE `Reservation`
   ADD CONSTRAINT `chk_Reservation_Dates` CHECK (`CheckOutDate` > `CheckInDate`);
 
 --
 -- Chỉ mục cho bảng `room`
 -- Ràng buộc cho bảng 'room'
 ALTER TABLE `Room`
-  ADD KEY `fk_Hotel_Room` (`HotelId`);
+  ADD INDEX `idx_Room_HotelId` (`HotelId`);
+
+ALTER TABLE `Room`
   ADD CONSTRAINT `fk_Hotel_Room` FOREIGN KEY (`HotelId`) REFERENCES `Hotel` (`HotelId`);
+
+ALTER TABLE `Room`
   ADD CONSTRAINT `chk_Room_Price` CHECK (`BasePrice` >= 0 AND `CurrentPrice` >= 0);
 
 --
