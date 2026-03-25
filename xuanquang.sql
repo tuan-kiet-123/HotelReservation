@@ -92,3 +92,59 @@ END
 $$
 DELIMITER ;
 
+
+--
+-- Function Lọc phòng trống: fn_CheckRoomAvailability
+--
+DELIMITER $$
+CREATE DEFINER=`root`@`localhost` FUNCTION `fn_CheckRoomAvailability`(p_RoomId VARCHAR(255),
+    p_CheckIn DATETIME,
+    p_CheckOut DATETIME
+) RETURNS tinyint(1)
+    DETERMINISTIC
+BEGIN
+    DECLARE v_IsBusy INT;
+    -- Kiểm tra xem có đơn đặt phòng nào đang "chiếm chỗ" giao thoa với thời gian mới không
+    -- Không cần xét tới các đơn 'Cancelled' và 'Completed'
+    SELECT COUNT(*) INTO v_IsBusy
+    FROM Reservation
+    WHERE RoomId = p_RoomId
+      AND Status IN ('Confirmed', 'CheckedIn')
+      AND p_CheckIn < CheckOutDate 
+      AND p_CheckOut > CheckInDate;
+
+    -- Nếu v_IsBusy > 0 nghĩa là đã có người đặt, trả về FALSE (Không khả dụng)
+    IF v_IsBusy > 0 THEN
+        RETURN FALSE;
+    ELSE
+        RETURN TRUE;
+    END IF;
+END$$
+DELIMITER ;
+
+
+--
+-- Procedure Danh sách các phòng và giá thoả mãn điều kiện 
+--
+DELIMITER $$
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_SearchAvailableRooms`(
+    IN p_CheckIn DATETIME,
+    IN p_CheckOut DATETIME,
+    IN p_MaxPrice DECIMAL(15,2)
+)
+BEGIN
+    -- Lấy thông tin phòng và khách sạn thỏa mãn điều kiện
+    SELECT 
+        h.HotelName,
+        r.RoomId,
+        r.RoomType,
+        r.CurrentPrice
+    FROM Room r
+    JOIN Hotel h ON r.HotelId = h.HotelId
+    WHERE r.Status = 1 -- Phòng đang trong trạng thái hoạt động (BIT = 1)
+      AND r.CurrentPrice <= p_MaxPrice
+      -- Sử dụng Function để lọc những phòng thực sự trống
+      AND fn_CheckRoomAvailability(r.RoomId, p_CheckIn, p_CheckOut) = TRUE;
+END$$
+DELIMITER ;
+
