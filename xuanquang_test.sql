@@ -68,3 +68,15 @@ CALL sp_CancelReservation('RES003');
 
 -- Kiểm tra kết quả: RefundAmount phải bằng 0
 SELECT RefundAmount, PenaltyAmount FROM Refund WHERE ReservationId = 'RES003';
+
+
+
+--
+-- Function tìm phòng trống, Procedure trả về danh sách phòng thoả mãn điều kiện
+--
+
+-- 1. Kiểm tra một phòng cụ thể (Trả về 1 là trống, 0 là bận)
+SELECT fn_CheckRoomAvailability('R101', '2026-05-01 14:00:00', '2026-05-05 12:00:00') AS IsAvailable;
+
+-- 2. Tìm kiếm danh sách phòng trống với ngân sách dưới 2,000,000
+CALL sp_SearchAvailableRooms('2026-06-01 14:00:00', '2026-06-05 12:00:00', 2000000);
