@@ -6,7 +6,7 @@ async function connectMongo() {
     throw new Error("Missing MONGODB_URI in environment variables");
   }
 
-  await mongoose.connect(env.MONGODB_URI);
+  await mongoose.connect(env.MONGODB_URI, { dbName: env.MONGODB_DATABASE });
   return mongoose.connection;
 }
 

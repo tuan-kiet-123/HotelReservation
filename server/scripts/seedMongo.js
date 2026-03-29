@@ -1,35 +1,19 @@
 require("dotenv").config();
 
 const mongoose = require("mongoose");
+const env = require("../src/config/env");
 const Hotel = require("../src/models/mongo/Hotel");
 const User = require("../src/models/mongo/User");
 const Review = require("../src/models/mongo/Review");
 
 async function seedDatabase() {
   try {
-    await mongoose.connect(process.env.MONGODB_URI);
+    await mongoose.connect(env.MONGODB_URI, { dbName: env.MONGODB_DATABASE });
     console.log("MongoDB connected");
 
-    await Hotel.deleteMany({});
-    await User.deleteMany({});
-    await Review.deleteMany({});
-
-    const hotel = await Hotel.create({
-      Name: "Santiago Bernabeu Hotel",
-      Location: "Madrid, Spain",
-      Amenities: ["Free WiFi", "Swimming Pool", "Football Pitch"]
-    });
-
-    const user = await User.create({
-      _id: "U001",
-      FullName: "Thomas Muller",
-      Email: "thomas.muller@fcbayern.com",
-      Phone: "0901234567"
-    });
-
     await Review.create({
-      HotelId: hotel._id,
-      UserId: user._id,
+      HotelId: "69c9453c97d53daa0f29cce1",
+      UserId: "U001",
       Rating: 5,
       Comment: "Hala Madrid!"
     });

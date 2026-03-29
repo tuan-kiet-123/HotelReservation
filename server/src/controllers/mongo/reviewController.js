@@ -1,5 +1,6 @@
 const reviewService = require("../../services/mongo/reviewService");
 const { success, fail } = require("../../utils/apiResponse");
+const mongoose = require("mongoose");
 
 async function createReview(req, res, next) {
   try {
@@ -45,9 +46,29 @@ async function deleteReview(req, res, next) {
   }
 }
 
+async function getHotelAverageRatingReport(req, res, next) {
+  try {
+    const { hotelId } = req.params;
+
+    if (!mongoose.isValidObjectId(hotelId)) {
+      return fail(res, "Invalid hotel id", 400);
+    }
+
+    const report = await reviewService.getHotelAverageRating(hotelId);
+    if (!report) {
+      return fail(res, "No reviews found for this hotel", 404);
+    }
+
+    return success(res, report, "Get hotel average rating successfully");
+  } catch (error) {
+    return next(error);
+  }
+}
+
 module.exports = {
   createReview,
   getReviews,
   updateReview,
-  deleteReview
+  deleteReview,
+  getHotelAverageRatingReport
 };

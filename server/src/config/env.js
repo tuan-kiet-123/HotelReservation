@@ -19,6 +19,7 @@ module.exports = {
   NODE_ENV: getEnv("NODE_ENV", "development"),
   PORT: Number(getEnv("PORT", 5000)),
   MONGODB_URI: getEnv("MONGODB_URI", ""),
+  MONGODB_DATABASE: getEnv("MONGODB_DATABASE", "hotelreservation"),
   MYSQL_HOST: getEnv("MYSQL_HOST", ""),
   MYSQL_PORT: Number(getEnv("MYSQL_PORT", 3306)),
   MYSQL_USER: getEnv("MYSQL_USER", ""),
