@@ -14,6 +14,10 @@
 2. `npm install --prefix server`
 3. `npm install --prefix client`
 
+### Cấu hình env
+1. tạo file `.env` ở root với mẫu như `.env.example`
+2. cấu hình theo yêu cầu
+
 ### Run
 - Backend only: `npm run dev:server`
 - Frontend only: `npm run dev:client`
