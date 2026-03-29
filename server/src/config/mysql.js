@@ -10,7 +10,9 @@ const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
-  ssl: env.MYSQL_SSL === "true" ? { rejectUnauthorized: true } : undefined
+  ssl: env.MYSQL_SSL === "true" ? {
+    rejectUnauthorized: env.NODE_ENV === "production"
+  } : undefined
 });
 
 async function checkMySqlConnection() {
