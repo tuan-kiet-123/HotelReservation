@@ -1,3 +1,4 @@
+-- Active: 1774795782931@@mysql-13d42b0b-hotelreservation.j.aivencloud.com@19897@hotelreservation
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
 SET time_zone = "+00:00";
