@@ -1,3 +1,4 @@
+-- Active: 1774776786163@@mysql-13d42b0b-hotelreservation.j.aivencloud.com@19897@hotelreservation
 USE hotelreservation;
 
 DELIMITER $$
@@ -114,7 +115,18 @@ CREATE PROCEDURE SP_Generate_QuarterlyTop3Rooms(
 )
 BEGIN
   DROP TEMPORARY TABLE IF EXISTS tmp_mapped_ledger;
-  CREATE TEMPORARY TABLE tmp_mapped_ledger AS
+  CREATE TEMPORARY TABLE tmp_mapped_ledger (
+    LedgerId VARCHAR(10) NOT NULL,
+    EventType VARCHAR(50),
+    DebitAmount DECIMAL(15, 2),
+    CreditAmount DECIMAL(15, 2),
+    Date DATETIME,
+    HotelId VARCHAR(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
+    RoomId VARCHAR(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
+    PRIMARY KEY (LedgerId)
+  );
+
+  INSERT INTO tmp_mapped_ledger
   SELECT
     fl.LedgerId,
     fl.EventType,
@@ -151,7 +163,14 @@ BEGIN
     AND fl.EventType IN ('RefundPayout', 'PenaltyRevenue');
 
   DROP TEMPORARY TABLE IF EXISTS tmp_room_revenue;
-  CREATE TEMPORARY TABLE tmp_room_revenue AS
+  CREATE TEMPORARY TABLE tmp_room_revenue (
+    HotelId VARCHAR(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
+    RoomId VARCHAR(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
+    NetRevenue DECIMAL(15, 2),
+    PRIMARY KEY (HotelId, RoomId)
+  );
+
+  INSERT INTO tmp_room_revenue
   SELECT
     ml.HotelId,
     ml.RoomId,
@@ -165,7 +184,6 @@ BEGIN
   FROM tmp_mapped_ledger ml
   GROUP BY ml.HotelId, ml.RoomId;
 
-  -- Top 3 phong theo doanh thu thuan moi khach san
   SELECT
     ranked.HotelId,
     ranked.RoomId,
@@ -196,7 +214,18 @@ CREATE PROCEDURE SP_Generate_QuarterlyRefundRatio(
 )
 BEGIN
   DROP TEMPORARY TABLE IF EXISTS tmp_mapped_ledger;
-  CREATE TEMPORARY TABLE tmp_mapped_ledger AS
+  CREATE TEMPORARY TABLE tmp_mapped_ledger (
+    LedgerId VARCHAR(10) NOT NULL,
+    EventType VARCHAR(50),
+    DebitAmount DECIMAL(15, 2),
+    CreditAmount DECIMAL(15, 2),
+    Date DATETIME,
+    HotelId VARCHAR(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
+    RoomId VARCHAR(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
+    PRIMARY KEY (LedgerId)
+  );
+
+  INSERT INTO tmp_mapped_ledger
   SELECT
     fl.LedgerId,
     fl.EventType,
@@ -233,7 +262,14 @@ BEGIN
     AND fl.EventType IN ('RefundPayout', 'PenaltyRevenue');
 
   DROP TEMPORARY TABLE IF EXISTS tmp_hotel_totals;
-  CREATE TEMPORARY TABLE tmp_hotel_totals AS
+  CREATE TEMPORARY TABLE tmp_hotel_totals (
+    HotelId VARCHAR(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+    TotalRevenueIn DECIMAL(15, 2),
+    TotalRefundPayout DECIMAL(15, 2),
+    PRIMARY KEY (HotelId)
+  );
+
+  INSERT INTO tmp_hotel_totals
   SELECT
     ml.HotelId,
     SUM(
@@ -283,7 +319,18 @@ BEGIN
   SET v_days_in_quarter = DATEDIFF(v_quarter_end, v_quarter_start);
 
   DROP TEMPORARY TABLE IF EXISTS tmp_mapped_ledger;
-  CREATE TEMPORARY TABLE tmp_mapped_ledger AS
+  CREATE TEMPORARY TABLE tmp_mapped_ledger (
+    LedgerId VARCHAR(10) NOT NULL,
+    EventType VARCHAR(50),
+    DebitAmount DECIMAL(15, 2),
+    CreditAmount DECIMAL(15, 2),
+    Date DATETIME,
+    HotelId VARCHAR(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
+    RoomId VARCHAR(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
+    PRIMARY KEY (LedgerId)
+  );
+
+  INSERT INTO tmp_mapped_ledger
   SELECT
     fl.LedgerId,
     fl.EventType,
@@ -320,7 +367,13 @@ BEGIN
     AND fl.EventType IN ('RefundPayout', 'PenaltyRevenue');
 
   DROP TEMPORARY TABLE IF EXISTS tmp_hotel_totals;
-  CREATE TEMPORARY TABLE tmp_hotel_totals AS
+  CREATE TEMPORARY TABLE tmp_hotel_totals (
+    HotelId VARCHAR(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+    TotalRevenueIn DECIMAL(15, 2),
+    PRIMARY KEY (HotelId)
+  );
+
+  INSERT INTO tmp_hotel_totals
   SELECT
     ml.HotelId,
     SUM(
@@ -333,17 +386,23 @@ BEGIN
   GROUP BY ml.HotelId;
 
   DROP TEMPORARY TABLE IF EXISTS tmp_room_nights;
-  CREATE TEMPORARY TABLE tmp_room_nights AS
+  CREATE TEMPORARY TABLE tmp_room_nights (
+    HotelId VARCHAR(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
+    RoomId VARCHAR(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
+    OccupiedRoomNights INT,
+    PRIMARY KEY (HotelId, RoomId)
+  );
+
+  INSERT INTO tmp_room_nights
   SELECT
     rm.HotelId,
     rs.RoomId,
     SUM(
       GREATEST(
         0,
-        TIMESTAMPDIFF(
-          DAY,
-          GREATEST(rs.CheckInDate, v_quarter_start),
-          LEAST(rs.CheckOutDate, v_quarter_end)
+        DATEDIFF(
+          DATE(LEAST(rs.CheckOutDate, v_quarter_end)),
+          DATE(GREATEST(rs.CheckInDate, v_quarter_start))
         )
       )
     ) AS OccupiedRoomNights
@@ -355,7 +414,14 @@ BEGIN
   GROUP BY rm.HotelId, rs.RoomId;
 
   DROP TEMPORARY TABLE IF EXISTS tmp_hotel_inventory;
-  CREATE TEMPORARY TABLE tmp_hotel_inventory AS
+  CREATE TEMPORARY TABLE tmp_hotel_inventory (
+    HotelId VARCHAR(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+    TotalRooms INT,
+    AvailableRoomNights INT,
+    PRIMARY KEY (HotelId)
+  );
+
+  INSERT INTO tmp_hotel_inventory
   SELECT
     h.HotelId,
     COALESCE(COUNT(r.RoomId), 0) AS TotalRooms,
