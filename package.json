@@ -1,6 +1,13 @@
 {
-  "dependencies": {
-    "dotenv": "^17.3.1",
-    "mongoose": "^9.3.3"
+  "name": "hotelreservation-workspace",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm run dev --prefix client\" \"npm run dev --prefix server\"",
+    "dev:client": "npm run dev --prefix client",
+    "dev:server": "npm run dev --prefix server",
+    "start:server": "npm run start --prefix server"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
   }
 }
