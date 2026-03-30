@@ -1,8 +1,5 @@
 -- Active: 1774795782931@@mysql-13d42b0b-hotelreservation.j.aivencloud.com@19897@hotelreservation
-SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
-START TRANSACTION;
-SET time_zone = "+00:00";
-
+USE hotelreservation;
 --
 -- Procedure và Trigger của Quang
 --
@@ -11,7 +8,8 @@ DELIMITER $$
 --
 -- Procedure Huỷ phòng
 --
-CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_CancelReservation` (IN `p_ReservationId` VARCHAR(255))   BEGIN
+CREATE PROCEDURE `sp_CancelReservation` (IN `p_ReservationId` VARCHAR(255))   
+BEGIN
     DECLARE v_CheckInDate DATETIME;
     DECLARE v_TotalPaid DECIMAL(15,2);
     DECLARE v_TotalAmount DECIMAL(15,2); -- Tổng giá trị đơn đặt phòng
@@ -73,7 +71,7 @@ DELIMITER ;
 -- Trigger bảng Refund: tr_AfterRefund_InsertLedger (thêm tiền vào bảng quản lý tài chính sau khi refund)
 --
 DELIMITER $$
-CREATE TRIGGER `tr_AfterRefund_InsertLedger` AFTER INSERT ON `refund` FOR EACH ROW BEGIN
+CREATE TRIGGER `tr_AfterRefund_InsertLedger` AFTER INSERT ON `Refund` FOR EACH ROW BEGIN
     -- Ghi chép chi tiết sự kiện dòng tiền ra (Credit) 
     INSERT INTO FinancialLedger (
         LedgerId, 
@@ -97,8 +95,8 @@ DELIMITER ;
 --
 -- Function Lọc phòng trống: fn_CheckRoomAvailability
 --
-DELIMITER $$
-CREATE DEFINER=`root`@`localhost` FUNCTION `fn_CheckRoomAvailability`(p_RoomId VARCHAR(255),
+DELIMITER $$ 
+CREATE FUNCTION `fn_CheckRoomAvailability`(p_RoomId VARCHAR(255),
     p_CheckIn DATETIME,
     p_CheckOut DATETIME
 ) RETURNS tinyint(1)
@@ -120,15 +118,16 @@ BEGIN
     ELSE
         RETURN TRUE;
     END IF;
-END$$
-DELIMITER ;
+END
+$$
+DELIMITER ; 
 
 
 --
 -- Procedure Danh sách các phòng và giá thoả mãn điều kiện 
 --
-DELIMITER $$
-CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_SearchAvailableRooms`(
+DELIMITER $$ 
+CREATE PROCEDURE `sp_SearchAvailableRooms`(
     IN p_CheckIn DATETIME,
     IN p_CheckOut DATETIME,
     IN p_MaxPrice DECIMAL(15,2)
@@ -146,6 +145,7 @@ BEGIN
       AND r.CurrentPrice <= p_MaxPrice
       -- Sử dụng Function để lọc những phòng thực sự trống
       AND fn_CheckRoomAvailability(r.RoomId, p_CheckIn, p_CheckOut) = TRUE;
-END$$
+END
+$$
 DELIMITER ;
 

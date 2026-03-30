@@ -1,5 +1,5 @@
 DELIMITER $$
-CREATE DEFINER=`root`@`localhost` FUNCTION `fn_CheckRoomAvailability`(p_RoomId VARCHAR(255),
+CREATE FUNCTION `fn_CheckRoomAvailability`(p_RoomId VARCHAR(255),
 	p_CheckIn DATETIME,
 	p_CheckOut DATETIME
 ) RETURNS tinyint(1)
