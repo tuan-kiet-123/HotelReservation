@@ -25,8 +25,11 @@ const reviewSchema = new mongoose.Schema(
     }
   },
   {
-    timestamps: { createdAt: "CreateAt", updatedAt: false }
+    timestamps: { createdAt: "CreatedAt", updatedAt: false }
   }
 );
+
+reviewSchema.index({ HotelId: 1, CreatedAt: -1 });
+reviewSchema.index({ UserId: 1, CreatedAt: -1 });
 
 module.exports = mongoose.model("Review", reviewSchema, "Review");

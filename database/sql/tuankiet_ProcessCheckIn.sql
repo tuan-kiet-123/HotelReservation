@@ -32,7 +32,7 @@ BEGIN
     IF v_ResStatus IS NULL THEN
         ROLLBACK;
         SELECT 'HTTP 404: Không tìm thấy đơn.' AS Message;
-    ELSEIF v_ResStatus != 'Confirmed' THEN
+    ELSEIF v_ResStatus COLLATE utf8mb4_general_ci <> 'Confirmed' THEN
         ROLLBACK;
         SELECT 'HTTP 400: Trạng thái đơn không hợp lệ.' AS Message;
     ELSE
@@ -64,7 +64,9 @@ BEGIN
         END IF;
 
         -- Đổi trạng thái sang CheckedIn
-        UPDATE Reservation SET Status = 'CheckedIn' WHERE ReservationId = p_ReservationId;
+        UPDATE Reservation
+        SET Status = 'CheckedIn'
+        WHERE ReservationId = p_ReservationId COLLATE utf8mb4_general_ci;
 
         COMMIT;
         SELECT 'HTTP 200: Check-in thành công!' AS Message, v_RemainingAmount AS AmountCollected;

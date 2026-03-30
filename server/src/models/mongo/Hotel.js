@@ -2,6 +2,11 @@ const mongoose = require("mongoose");
 
 const hotelSchema = new mongoose.Schema(
   {
+    SqlHotelId: {
+      type: String,
+      trim: true,
+      default: null
+    },
     Name: {
       type: String,
       required: true,
@@ -21,5 +26,7 @@ const hotelSchema = new mongoose.Schema(
     timestamps: true
   }
 );
+
+hotelSchema.index({ SqlHotelId: 1 }, { unique: true, sparse: true });
 
 module.exports = mongoose.model("Hotel", hotelSchema, "Hotel");

@@ -49,6 +49,24 @@ async function bookRoom(input) {
     };
 }
 
+async function processCheckInPayment(input) {
+    const [rows] = await pool.query("CALL sp_ProcessCheckIn(?)", [
+        input.reservationId
+    ]);
+
+    const row = getFirstRow(rows);
+    const parsed = parseHttpMessage(row.Message);
+
+    return {
+        statusCode: parsed.statusCode,
+        message: parsed.message,
+        data: {
+            amountCollected: Number(row.AmountCollected || 0)
+        }
+    };
+}
+
 module.exports = {
-    bookRoom
+    bookRoom,
+    processCheckInPayment
 };

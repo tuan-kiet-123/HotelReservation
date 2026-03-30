@@ -7,15 +7,39 @@ async function createReview(req, res, next) {
     const review = await reviewService.createReview(req.body);
     return success(res, review, "Create review successfully", 201);
   } catch (error) {
+    if (error.statusCode) {
+      return fail(res, error.message, error.statusCode);
+    }
+
     return next(error);
   }
 }
 
 async function getReviews(req, res, next) {
   try {
-    const reviews = await reviewService.getReviews();
+    const reviews = await reviewService.getReviews({
+      hotelId: req.query.hotelId,
+      userId: req.query.userId
+    });
     return success(res, reviews, "Get reviews successfully");
   } catch (error) {
+    if (error.statusCode) {
+      return fail(res, error.message, error.statusCode);
+    }
+
+    return next(error);
+  }
+}
+
+async function getReviewsByHotel(req, res, next) {
+  try {
+    const reviews = await reviewService.getReviews({ hotelId: req.params.hotelId });
+    return success(res, reviews, "Get hotel reviews successfully");
+  } catch (error) {
+    if (error.statusCode) {
+      return fail(res, error.message, error.statusCode);
+    }
+
     return next(error);
   }
 }
@@ -29,6 +53,10 @@ async function updateReview(req, res, next) {
 
     return success(res, review, "Update review successfully");
   } catch (error) {
+    if (error.statusCode) {
+      return fail(res, error.message, error.statusCode);
+    }
+
     return next(error);
   }
 }
@@ -42,6 +70,10 @@ async function deleteReview(req, res, next) {
 
     return success(res, { id: req.params.id }, "Delete review successfully");
   } catch (error) {
+    if (error.statusCode) {
+      return fail(res, error.message, error.statusCode);
+    }
+
     return next(error);
   }
 }
@@ -68,6 +100,7 @@ async function getHotelAverageRatingReport(req, res, next) {
 module.exports = {
   createReview,
   getReviews,
+  getReviewsByHotel,
   updateReview,
   deleteReview,
   getHotelAverageRatingReport

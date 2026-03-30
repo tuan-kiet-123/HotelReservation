@@ -47,6 +47,29 @@ async function bookRoom(req, res, next) {
   }
 }
 
+async function processCheckInPayment(req, res, next) {
+  try {
+    const { reservationId } = req.body;
+
+    if (!reservationId) {
+      return fail(res, "reservationId is required", 400);
+    }
+
+    const result = await bookingService.processCheckInPayment({
+      reservationId
+    });
+
+    if (result.statusCode >= 400) {
+      return fail(res, result.message, result.statusCode, result.data);
+    }
+
+    return success(res, result.data, result.message, result.statusCode);
+  } catch (error) {
+    return next(error);
+  }
+}
+
 module.exports = {
-  bookRoom
+  bookRoom,
+  processCheckInPayment
 };
