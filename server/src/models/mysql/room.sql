@@ -1,6 +1,6 @@
 CREATE TABLE `Room` (
   `RoomId` varchar(10) NOT NULL Primary Key,
-  `HotelId` varchar(10) NOT NULL,
+  `HotelId` varchar(24) NOT NULL,
   `RoomType` varchar(100),
   `BasePrice` decimal(18,2) NOT NULL,
   `CurrentPrice` decimal(18,2),
