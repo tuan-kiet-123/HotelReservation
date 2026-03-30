@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 
 const hotelSchema = new mongoose.Schema(
   {
-    HotelId: {
+    SqlHotelId: {
       type: String,
       trim: true,
       required: true,
@@ -29,13 +29,12 @@ const hotelSchema = new mongoose.Schema(
   }
 );
 
-hotelSchema.pre("validate", function mapSqlHotelIdFromMongoId(next) {
+hotelSchema.pre("validate", function mapSqlHotelIdFromMongoId() {
   if (!this.SqlHotelId && this._id) {
     this.SqlHotelId = String(this._id);
   }
-  next();
 });
 
-hotelSchema.index({ SqlHotelId: 1 }, { unique: true });
+hotelSchema.index({ SqlHotelId: 1 }, { unique: true, sparse: true });
 
 module.exports = mongoose.model("Hotel", hotelSchema, "Hotel");

@@ -68,8 +68,42 @@ async function getQuarterlyAdrRevparReport(req, res, next) {
   }
 }
 
+async function getFinancialLedgers(req, res, next) {
+  try {
+    const { page = 1, pageSize = 10, startDate, endDate, eventType } = req.query;
+    
+    // Validate pagination params
+    const pageNum = Number.parseInt(page, 10);
+    const pageSizeNum = Number.parseInt(pageSize, 10);
+    
+    if (!Number.isInteger(pageNum) || pageNum < 1) {
+      return fail(res, "Query param 'page' must be a positive integer", 400);
+    }
+    
+    if (!Number.isInteger(pageSizeNum) || pageSizeNum < 1) {
+      return fail(res, "Query param 'pageSize' must be a positive integer", 400);
+    }
+    
+    if (pageSizeNum > 100) {
+      return fail(res, "Query param 'pageSize' cannot exceed 100", 400);
+    }
+    
+    // Build filters
+    const filters = {};
+    if (startDate) filters.startDate = startDate;
+    if (endDate) filters.endDate = endDate;
+    if (eventType) filters.eventType = eventType;
+    
+    const result = await reportService.getFinancialLedgers(pageNum, pageSizeNum, filters);
+    return success(res, result, "Get financial ledgers successfully");
+  } catch (error) {
+    return next(error);
+  }
+}
+
 module.exports = {
   getQuarterlyTop3RoomsReport,
   getQuarterlyRefundRatioReport,
-  getQuarterlyAdrRevparReport
+  getQuarterlyAdrRevparReport,
+  getFinancialLedgers
 };

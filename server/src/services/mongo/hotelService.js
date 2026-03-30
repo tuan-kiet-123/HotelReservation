@@ -8,14 +8,14 @@ function createServiceError(message, statusCode = 500) {
   return error;
 }
 
-function toHotelName(name, sqlHotelId) {
-  const fallback = `Hotel ${sqlHotelId}`;
+function toHotelName(name, SqlHotelId) {
+  const fallback = `Hotel ${SqlHotelId}`;
   const normalized = String(name || fallback).trim();
   return normalized.slice(0, 100) || fallback.slice(0, 100);
 }
 
-async function upsertMySqlHotel(sqlHotelId, name) {
-  const hotelName = toHotelName(name, sqlHotelId);
+async function upsertMySqlHotel(SqlHotelId, name) {
+  const hotelName = toHotelName(name, SqlHotelId);
 
   await pool.query(
     `
@@ -25,24 +25,24 @@ async function upsertMySqlHotel(sqlHotelId, name) {
       HotelName = VALUES(HotelName),
       Status = 1
     `,
-    [sqlHotelId, hotelName]
+    [SqlHotelId, hotelName]
   );
 }
 
 async function createHotel(payload) {
   const mongoId = new mongoose.Types.ObjectId();
-  const sqlHotelId = String(mongoId);
+  const SqlHotelId = String(mongoId);
   const createPayload = {
     ...payload,
     _id: mongoId,
-    SqlHotelId: sqlHotelId
+    SqlHotelId: SqlHotelId
   };
 
   let hotel;
 
   try {
     hotel = await Hotel.create(createPayload);
-    await upsertMySqlHotel(sqlHotelId, hotel.Name);
+    await upsertMySqlHotel(SqlHotelId, hotel.Name);
     return hotel;
   } catch (error) {
     if (hotel?._id) {
