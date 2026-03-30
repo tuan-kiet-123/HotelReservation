@@ -60,8 +60,62 @@ async function getQuarterlyAdrRevparReport(year, quarter) {
   return callQuarterlyProcedure("SP_Generate_QuarterlyADRRevPAR", year, quarter);
 }
 
+async function getFinancialLedgers(page = 1, pageSize = 10, filters = {}) {
+  const { startDate, endDate, eventType } = filters;
+  
+  // Validate pagination
+  const p = Math.max(1, Number.parseInt(page, 10) || 1);
+  const ps = Math.max(1, Number.parseInt(pageSize, 10) || 10);
+  const offset = (p - 1) * ps;
+  
+  // Build WHERE clause
+  const conditions = [];
+  const params = [];
+  
+  if (startDate) {
+    conditions.push("Date >= ?");
+    params.push(startDate);
+  }
+  
+  if (endDate) {
+    conditions.push("Date <= ?");
+    params.push(endDate);
+  }
+  
+  if (eventType) {
+    conditions.push("EventType = ?");
+    params.push(eventType);
+  }
+  
+  const whereClause = conditions.length > 0 ? "WHERE " + conditions.join(" AND ") : "";
+  
+  // Get total count
+  const countQuery = `SELECT COUNT(*) as total FROM FinancialLedger ${whereClause}`;
+  const [countRows] = await pool.query(countQuery, params);
+  const total = countRows[0]?.total || 0;
+  
+  // Get paginated data
+  const dataQuery = `
+    SELECT LedgerId, ReferenceId, EventType, DebitAmount, CreditAmount, Date
+    FROM FinancialLedger
+    ${whereClause}
+    ORDER BY Date DESC
+    LIMIT ? OFFSET ?
+  `;
+  const [dataRows] = await pool.query(dataQuery, [...params, ps, offset]);
+  
+  return {
+    data: dataRows,
+    total,
+    page: p,
+    pageSize: ps,
+    totalPages: Math.ceil(total / ps)
+  };
+}
+
 module.exports = {
   getQuarterlyTop3RoomsReport,
   getQuarterlyRefundRatioReport,
-  getQuarterlyAdrRevparReport
+  getQuarterlyAdrRevparReport,
+  getFinancialLedgers
 };

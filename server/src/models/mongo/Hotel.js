@@ -5,7 +5,8 @@ const hotelSchema = new mongoose.Schema(
     SqlHotelId: {
       type: String,
       trim: true,
-      default: null
+      required: true,
+      immutable: true
     },
     Name: {
       type: String,
@@ -23,9 +24,16 @@ const hotelSchema = new mongoose.Schema(
     }
   },
   {
-    timestamps: true
+    timestamps: true,
+    strict: false
   }
 );
+
+hotelSchema.pre("validate", function mapSqlHotelIdFromMongoId() {
+  if (!this.SqlHotelId && this._id) {
+    this.SqlHotelId = String(this._id);
+  }
+});
 
 hotelSchema.index({ SqlHotelId: 1 }, { unique: true, sparse: true });
 
