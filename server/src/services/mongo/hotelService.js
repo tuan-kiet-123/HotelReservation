@@ -8,24 +8,15 @@ function createServiceError(message, statusCode = 500) {
   return error;
 }
 
-function toHotelName(name, SqlHotelId) {
-  const fallback = `Hotel ${SqlHotelId}`;
-  const normalized = String(name || fallback).trim();
-  return normalized.slice(0, 100) || fallback.slice(0, 100);
-}
-
-async function upsertMySqlHotel(SqlHotelId, name) {
-  const hotelName = toHotelName(name, SqlHotelId);
-
+async function upsertMySqlHotel(SqlHotelId) {
   await pool.query(
     `
-    INSERT INTO Hotel (HotelId, HotelName, Status)
-    VALUES (?, ?, 1)
+    INSERT INTO Hotel (HotelId, Status)
+    VALUES (?, 1)
     ON DUPLICATE KEY UPDATE
-      HotelName = VALUES(HotelName),
       Status = 1
     `,
-    [SqlHotelId, hotelName]
+    [SqlHotelId]
   );
 }
 
@@ -42,7 +33,7 @@ async function createHotel(payload) {
 
   try {
     hotel = await Hotel.create(createPayload);
-    await upsertMySqlHotel(SqlHotelId, hotel.Name);
+    await upsertMySqlHotel(SqlHotelId);
     return hotel;
   } catch (error) {
     if (hotel?._id) {

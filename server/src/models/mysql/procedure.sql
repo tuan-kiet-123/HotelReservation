@@ -1,3 +1,4 @@
+-- Active: 1774776786163@@mysql-13d42b0b-hotelreservation.j.aivencloud.com@19897@hotelreservation
 DELIMITER $$
 
 DROP PROCEDURE IF EXISTS SP_Generate_QuarterlyReport$$
@@ -181,17 +182,15 @@ BEGIN
 	GROUP BY ml.HotelId;
 
 	SELECT
-		h.HotelId,
-		h.HotelName,
+		ht.HotelId,
 		COALESCE(ht.TotalRevenueIn, 0) AS TotalRevenueIn,
 		COALESCE(ht.TotalRefundPayout, 0) AS TotalRefundPayout,
 		ROUND(
 			COALESCE(ht.TotalRefundPayout, 0) * 100 / NULLIF(COALESCE(ht.TotalRevenueIn, 0), 0),
 			2
 		) AS RefundToRevenueRatio
-	FROM Hotel h
-	LEFT JOIN tmp_hotel_totals ht ON ht.HotelId = h.HotelId
-	ORDER BY h.HotelId;
+	FROM tmp_hotel_totals ht
+	ORDER BY ht.HotelId;
 
 	DROP TEMPORARY TABLE IF EXISTS tmp_mapped_ledger;
 	DROP TEMPORARY TABLE IF EXISTS tmp_hotel_totals;
@@ -316,16 +315,15 @@ BEGIN
 
 	INSERT INTO tmp_hotel_inventory
 	SELECT
-		h.HotelId,
+		r.HotelId,
 		COALESCE(COUNT(r.RoomId), 0) AS TotalRooms,
 		COALESCE(COUNT(r.RoomId), 0) * v_days_in_quarter AS AvailableRoomNights
-	FROM Hotel h
-	LEFT JOIN Room r ON r.HotelId = h.HotelId AND r.Status = 1
-	GROUP BY h.HotelId;
+	FROM Room r
+	WHERE r.Status = 1
+	GROUP BY r.HotelId;
 
 	SELECT
-		h.HotelId,
-		h.HotelName,
+		COALESCE(ht.HotelId, rn.HotelId, inv.HotelId) AS HotelId,
 		COALESCE(ht.TotalRevenueIn, 0) AS RoomRevenueForKPI,
 		COALESCE(rn.OccupiedRoomNights, 0) AS OccupiedRoomNights,
 		COALESCE(inv.AvailableRoomNights, 0) AS AvailableRoomNights,
@@ -335,15 +333,54 @@ BEGIN
 		) AS OccupancyRate,
 		COALESCE(ht.TotalRevenueIn, 0) / NULLIF(COALESCE(rn.OccupiedRoomNights, 0), 0) AS ADR,
 		COALESCE(ht.TotalRevenueIn, 0) / NULLIF(COALESCE(inv.AvailableRoomNights, 0), 0) AS RevPAR
-	FROM Hotel h
-	LEFT JOIN tmp_hotel_totals ht ON ht.HotelId = h.HotelId
+	FROM tmp_hotel_totals ht
 	LEFT JOIN (
 		SELECT HotelId, SUM(OccupiedRoomNights) AS OccupiedRoomNights
 		FROM tmp_room_nights
 		GROUP BY HotelId
-	) rn ON rn.HotelId = h.HotelId
-	LEFT JOIN tmp_hotel_inventory inv ON inv.HotelId = h.HotelId
-	ORDER BY h.HotelId;
+	) rn ON rn.HotelId = ht.HotelId
+	LEFT JOIN tmp_hotel_inventory inv ON inv.HotelId = ht.HotelId
+	UNION
+	SELECT
+		COALESCE(ht.HotelId, rn.HotelId, inv.HotelId) AS HotelId,
+		COALESCE(ht.TotalRevenueIn, 0) AS RoomRevenueForKPI,
+		COALESCE(rn.OccupiedRoomNights, 0) AS OccupiedRoomNights,
+		COALESCE(inv.AvailableRoomNights, 0) AS AvailableRoomNights,
+		ROUND(
+			COALESCE(rn.OccupiedRoomNights, 0) * 100 / NULLIF(COALESCE(inv.AvailableRoomNights, 0), 0),
+			2
+		) AS OccupancyRate,
+		COALESCE(ht.TotalRevenueIn, 0) / NULLIF(COALESCE(rn.OccupiedRoomNights, 0), 0) AS ADR,
+		COALESCE(ht.TotalRevenueIn, 0) / NULLIF(COALESCE(inv.AvailableRoomNights, 0), 0) AS RevPAR
+	FROM tmp_hotel_totals ht
+	RIGHT JOIN (
+		SELECT HotelId, SUM(OccupiedRoomNights) AS OccupiedRoomNights
+		FROM tmp_room_nights
+		GROUP BY HotelId
+	) rn ON rn.HotelId = ht.HotelId
+	LEFT JOIN tmp_hotel_inventory inv ON inv.HotelId = COALESCE(rn.HotelId, ht.HotelId)
+	WHERE ht.HotelId IS NULL
+	UNION
+	SELECT
+		COALESCE(ht.HotelId, rn.HotelId, inv.HotelId) AS HotelId,
+		COALESCE(ht.TotalRevenueIn, 0) AS RoomRevenueForKPI,
+		COALESCE(rn.OccupiedRoomNights, 0) AS OccupiedRoomNights,
+		COALESCE(inv.AvailableRoomNights, 0) AS AvailableRoomNights,
+		ROUND(
+			COALESCE(rn.OccupiedRoomNights, 0) * 100 / NULLIF(COALESCE(inv.AvailableRoomNights, 0), 0),
+			2
+		) AS OccupancyRate,
+		COALESCE(ht.TotalRevenueIn, 0) / NULLIF(COALESCE(rn.OccupiedRoomNights, 0), 0) AS ADR,
+		COALESCE(ht.TotalRevenueIn, 0) / NULLIF(COALESCE(inv.AvailableRoomNights, 0), 0) AS RevPAR
+	FROM tmp_hotel_totals ht
+	LEFT JOIN (
+		SELECT HotelId, SUM(OccupiedRoomNights) AS OccupiedRoomNights
+		FROM tmp_room_nights
+		GROUP BY HotelId
+	) rn ON rn.HotelId = ht.HotelId
+	RIGHT JOIN tmp_hotel_inventory inv ON inv.HotelId = COALESCE(rn.HotelId, ht.HotelId)
+	WHERE rn.HotelId IS NULL AND ht.HotelId IS NULL
+	ORDER BY HotelId;
 
 	DROP TEMPORARY TABLE IF EXISTS tmp_mapped_ledger;
 	DROP TEMPORARY TABLE IF EXISTS tmp_hotel_totals;
@@ -527,7 +564,7 @@ END /
 DELIMITER;
 
 DELIMITER $$
-CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_CancelReservation` (IN `p_ReservationId` VARCHAR(255))   BEGIN
+CREATE PROCEDURE `sp_CancelReservation` (IN `p_ReservationId` VARCHAR(255))   BEGIN
 		DECLARE v_CheckInDate DATETIME;
 		DECLARE v_TotalPaid DECIMAL(15,2);
 		DECLARE v_TotalAmount DECIMAL(15,2);
@@ -573,19 +610,18 @@ END$$
 DELIMITER ;
 
 DELIMITER $$
-CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_SearchAvailableRooms`(
+CREATE PROCEDURE `sp_SearchAvailableRooms`(
 		IN p_CheckIn DATETIME,
 		IN p_CheckOut DATETIME,
 		IN p_MaxPrice DECIMAL(15,2)
 )
 BEGIN
 		SELECT 
-				h.HotelName,
-				r.RoomId,
-				r.RoomType,
-				r.CurrentPrice
+			r.HotelId,
+			r.RoomId,
+			r.RoomType,
+			r.CurrentPrice
 		FROM Room r
-		JOIN Hotel h ON r.HotelId = h.HotelId
 		WHERE r.Status = 1
 			AND r.CurrentPrice <= p_MaxPrice
 			AND fn_CheckRoomAvailability(r.RoomId, p_CheckIn, p_CheckOut) = TRUE;
