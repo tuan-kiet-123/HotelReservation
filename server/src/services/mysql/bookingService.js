@@ -66,7 +66,26 @@ async function processCheckInPayment(input) {
     };
 }
 
+async function processCheckOut(input) {
+    const [rows] = await pool.query("CALL sp_ProcessCheckOut(?)", [
+        input.reservationId
+    ]);
+
+    const row = getFirstRow(rows);
+    const parsed = parseHttpMessage(row.Message);
+
+    return {
+        statusCode: parsed.statusCode,
+        message: parsed.message,
+        data: {
+            reservationId: input.reservationId,
+            status: parsed.statusCode < 400 ? "Completed" : null
+        }
+    };
+}
+
 module.exports = {
     bookRoom,
-    processCheckInPayment
+    processCheckInPayment,
+    processCheckOut
 };

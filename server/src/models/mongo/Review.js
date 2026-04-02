@@ -7,6 +7,11 @@ const reviewSchema = new mongoose.Schema(
       ref: "Hotel",
       required: true
     },
+    ReservationId: {
+      type: String,
+      required: true,
+      trim: true
+    },
     UserId: {
       type: String,
       ref: "User",
@@ -31,5 +36,12 @@ const reviewSchema = new mongoose.Schema(
 
 reviewSchema.index({ HotelId: 1, CreatedAt: -1 });
 reviewSchema.index({ UserId: 1, CreatedAt: -1 });
+reviewSchema.index(
+  { ReservationId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { ReservationId: { $type: "string" } }
+  }
+);
 
 module.exports = mongoose.model("Review", reviewSchema, "Review");

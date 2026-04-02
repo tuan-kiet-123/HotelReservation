@@ -10,5 +10,6 @@ router.get("/reports/adr-revpar", reportController.getQuarterlyAdrRevparReport);
 router.get("/financial-ledgers", reportController.getFinancialLedgers);
 router.post("/bookings/book-room", bookingController.bookRoom);
 router.post("/bookings/check-in-payment", bookingController.processCheckInPayment);
+router.post("/bookings/check-out", bookingController.processCheckOut);
 
 module.exports = router;

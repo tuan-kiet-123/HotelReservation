@@ -19,7 +19,8 @@ async function getReviews(req, res, next) {
   try {
     const reviews = await reviewService.getReviews({
       hotelId: req.query.hotelId,
-      userId: req.query.userId
+      userId: req.query.userId,
+      reservationId: req.query.reservationId
     });
     return success(res, reviews, "Get reviews successfully");
   } catch (error) {

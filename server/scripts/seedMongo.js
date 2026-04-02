@@ -10,7 +10,7 @@ const { pool } = require("../src/config/mysql");
 async function getOneCompletedTrip() {
   const [rows] = await pool.query(
     `
-    SELECT r.UserId, rm.HotelId
+    SELECT r.ReservationId, r.UserId, rm.HotelId
     FROM Reservation r
     INNER JOIN Room rm ON rm.RoomId = r.RoomId
     WHERE r.Status = 'Completed'
@@ -26,20 +26,20 @@ async function getOneCompletedTrip() {
   return rows[0];
 }
 
-async function getCompletedUsersByHotel(sqlHotelId) {
+async function getCompletedReservationsByHotel(sqlHotelId) {
   const [rows] = await pool.query(
     `
-    SELECT DISTINCT r.UserId
+    SELECT DISTINCT r.ReservationId, r.UserId
     FROM Reservation r
     INNER JOIN Room rm ON rm.RoomId = r.RoomId
     WHERE r.Status = 'Completed'
       AND rm.HotelId = ?
-    ORDER BY r.UserId ASC
+    ORDER BY r.ReservationId ASC
     `,
     [sqlHotelId]
   );
 
-  return rows.map((row) => row.UserId);
+  return rows;
 }
 
 async function upsertMongoUser(sqlUserId) {
@@ -60,6 +60,7 @@ async function seedDatabase() {
     console.log("MongoDB connected");
 
     const completedTrip = await getOneCompletedTrip();
+    const sqlReservationId = completedTrip.ReservationId;
     const sqlUserId = completedTrip.UserId;
     const sqlHotelId = completedTrip.HotelId;
 
@@ -76,20 +77,22 @@ async function seedDatabase() {
       { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
     );
 
-    const allEligibleUsers = await getCompletedUsersByHotel(sqlHotelId);
-    for (const eligibleUserId of allEligibleUsers) {
-      await upsertMongoUser(eligibleUserId);
+    const eligibleReservations = await getCompletedReservationsByHotel(sqlHotelId);
+    for (const eligible of eligibleReservations) {
+      await upsertMongoUser(eligible.UserId);
     }
 
     const user = await upsertMongoUser(sqlUserId);
 
     const review = await Review.findOneAndUpdate(
       {
-        HotelId: hotel._id,
-        UserId: user._id
+        ReservationId: sqlReservationId
       },
       {
         $set: {
+          HotelId: hotel._id,
+          ReservationId: sqlReservationId,
+          UserId: user._id,
           Rating: 5,
           Comment: "Great stay, friendly staff"
         }
@@ -98,10 +101,9 @@ async function seedDatabase() {
     );
 
     let readyPayload = null;
-    for (const eligibleUserId of allEligibleUsers) {
+    for (const eligible of eligibleReservations) {
       const existing = await Review.findOne({
-        HotelId: hotel._id,
-        UserId: eligibleUserId
+        ReservationId: eligible.ReservationId
       })
         .select("_id")
         .lean();
@@ -109,7 +111,8 @@ async function seedDatabase() {
       if (!existing) {
         readyPayload = {
           HotelId: String(hotel._id),
-          UserId: eligibleUserId,
+          ReservationId: eligible.ReservationId,
+          UserId: eligible.UserId,
           Rating: 4,
           Comment: "Service was good and room was clean"
         };
@@ -121,6 +124,7 @@ async function seedDatabase() {
     console.log({
       sqlHotelId,
       sqlUserId,
+      sqlReservationId,
       mongoHotelId: String(hotel._id),
       mongoReviewId: String(review._id),
       readyPayload

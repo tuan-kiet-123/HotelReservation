@@ -10,7 +10,7 @@ function createServiceError(message, statusCode) {
   return error;
 }
 
-async function assertUserHasCompletedTrip(userId, sqlHotelId) {
+async function assertReservationEligibleForReview(userId, sqlHotelId, reservationId) {
   const [rows] = await pool.query(
     `
     SELECT 1
@@ -19,18 +19,23 @@ async function assertUserHasCompletedTrip(userId, sqlHotelId) {
     WHERE r.UserId = ?
       AND r.Status = 'Completed'
       AND rm.HotelId = ?
+      AND r.ReservationId = ?
     LIMIT 1
     `,
-    [userId, sqlHotelId]
+    [userId, sqlHotelId, reservationId]
   );
 
   if (!rows || rows.length === 0) {
-    throw createServiceError("User can only review after completing a trip at this hotel", 403);
+    throw createServiceError(
+      "User can only review a completed reservation at this hotel",
+      403
+    );
   }
 }
 
 function normalizeCreatePayload(payload) {
   const hotelId = payload.HotelId;
+  const reservationId = String(payload.ReservationId || "").trim();
   const userId = String(payload.UserId || "").trim();
   const rating = Number(payload.Rating);
   const comment = String(payload.Comment || "").trim();
@@ -43,6 +48,10 @@ function normalizeCreatePayload(payload) {
     throw createServiceError("UserId is required", 400);
   }
 
+  if (!reservationId) {
+    throw createServiceError("ReservationId is required", 400);
+  }
+
   if (!Number.isFinite(rating) || rating < 1 || rating > 5) {
     throw createServiceError("Rating must be a number between 1 and 5", 400);
   }
@@ -53,6 +62,7 @@ function normalizeCreatePayload(payload) {
 
   return {
     HotelId: hotelId,
+    ReservationId: reservationId,
     UserId: userId,
     Rating: rating,
     Comment: comment
@@ -76,15 +86,18 @@ async function createReview(payload) {
     throw createServiceError("User not found", 404);
   }
 
-  await assertUserHasCompletedTrip(normalizedPayload.UserId, hotel.SqlHotelId);
+  await assertReservationEligibleForReview(
+    normalizedPayload.UserId,
+    hotel.SqlHotelId,
+    normalizedPayload.ReservationId
+  );
 
   const existing = await Review.findOne({
-    HotelId: normalizedPayload.HotelId,
-    UserId: normalizedPayload.UserId
+    ReservationId: normalizedPayload.ReservationId
   }).select("_id");
 
   if (existing) {
-    throw createServiceError("User already reviewed this hotel", 409);
+    throw createServiceError("This reservation already has a review", 409);
   }
 
   return Review.create(normalizedPayload);
@@ -103,6 +116,10 @@ async function getReviews(filters = {}) {
 
   if (filters.userId) {
     query.UserId = String(filters.userId).trim();
+  }
+
+  if (filters.reservationId) {
+    query.ReservationId = String(filters.reservationId).trim();
   }
 
   return Review.find(query)
