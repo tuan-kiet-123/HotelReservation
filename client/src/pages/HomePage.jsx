@@ -4,9 +4,9 @@ import { NavLink } from 'react-router'
 
 const navLinks = [
     { to: '/', label: 'Trang chủ' },
-    { to: '/search', label: 'Tìm kiếm' },
-    { to: '/offers', label: 'Ưu đãi' },
-    { to: '/contact', label: 'Liên hệ' },
+    { to: '/hotels/69ca837d9a90b3531e860c22', label: 'Chi tiết KS' },
+    { to: '/checkout', label: 'Thanh toán' },
+    { to: '/my-bookings', label: 'Đơn của tôi' },
 ]
 
 const DAYS_VN = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN']
