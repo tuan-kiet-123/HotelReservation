@@ -437,30 +437,6 @@ const HomePage = () => {
                         <div>
                             <h4 className="text-white font-semibold mb-5 text-sm uppercase tracking-wider">Liên hệ</h4>
                             <ul className="flex flex-col gap-4">
-                                <li className="flex items-center gap-3 text-sm">
-                                    <User className="w-4 h-4 text-amber-400 shrink-0" />
-                                    <span>Phan Đình Phú</span>
-                                </li>
-                                <li className="flex items-center gap-3 text-sm">
-                                    <Mail className="w-4 h-4 text-amber-400 shrink-0" />
-                                    <span>52300051@student.tdtu.edu.vn</span>
-                                </li>
-                                <li className="flex items-center gap-3 text-sm">
-                                    <User className="w-4 h-4 text-amber-400 shrink-0" />
-                                    <span>Ngô Xuân Quang</span>
-                                </li>
-                                <li className="flex items-center gap-3 text-sm">
-                                    <Mail className="w-4 h-4 text-amber-400 shrink-0" />
-                                    <span>52300055@student.tdtu.edu.vn</span>
-                                </li>
-                                <li className="flex items-center gap-3 text-sm">
-                                    <User className="w-4 h-4 text-amber-400 shrink-0" />
-                                    <span>Trần Tuấn Kiệt</span>
-                                </li>
-                                <li className="flex items-center gap-3 text-sm">
-                                    <Mail className="w-4 h-4 text-amber-400 shrink-0" />
-                                    <span>52300040@student.tdtu.edu.vn</span>
-                                </li>
                                 <li className="flex items-start gap-3 text-sm">
                                     <MapPin className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
                                     <span>19 Nguyễn Hữu Thọ, Phường Tân Hưng, TP Hồ Chí Minh, Việt Nam</span>

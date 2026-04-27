@@ -147,7 +147,7 @@ export default function CheckoutPaymentPage() {
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(245,158,11,0.22),_rgba(255,255,255,0.1))]" />
                 <div className="max-w-6xl mx-auto px-4 py-10 relative">
                     <div className="mb-6">
-                        <p className="text-xs uppercase tracking-[0.2em] text-amber-600 font-semibold">1.4 Checkout and Payment</p>
+                        <p className="text-s uppercase tracking-[0.2em] text-amber-600 font-semibold">Checkout and Payment</p>
                         <h1 className="text-3xl font-bold text-slate-900 mt-2">Thanh toán đặt phòng</h1>
                         <p className="text-slate-600 mt-2">Trang này xử lý đúng quy tắc cọc 30% nếu đặt trước hơn 7 ngày, ngược lại thu 100%.</p>
                     </div>

@@ -182,7 +182,7 @@ export default function MyBookingsPage() {
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(245,158,11,0.2),_rgba(255,255,255,0))]" />
                 <div className="max-w-6xl mx-auto px-4 py-10 relative">
                     <div className="mb-6">
-                        <p className="text-xs uppercase tracking-[0.2em] text-amber-600 font-semibold">1.5 Booking Management</p>
+                        <p className="text-s uppercase tracking-[0.2em] text-amber-600 font-semibold">Booking Management</p>
                         <h1 className="text-3xl font-bold text-slate-900 mt-2">Đơn đặt phòng của tôi</h1>
                         <p className="text-slate-600 mt-2">Theo dõi trạng thái Confirmed → CheckedIn → Completed, và mở modal review 1.6 khi hoàn tất.</p>
                     </div>
