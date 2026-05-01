@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import SiteShell from "../components/SiteShell";
 import { fetchHotelById, fetchReviewsByHotel } from "../lib/api";
+import { useAuth } from "../lib/auth";
 
 const demoGallery = [
     "https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?auto=format&fit=crop&w=1400&q=80",
@@ -79,6 +80,7 @@ function parseAmenities(amenitiesRaw) {
 export default function HotelDetailPage() {
     const { hotelId } = useParams();
     const navigate = useNavigate();
+    const { currentUser } = useAuth();
 
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -225,28 +227,23 @@ export default function HotelDetailPage() {
                                         </div>
                                     </div>
 
-                                    <div>
-                                        <label className="text-xs font-semibold text-slate-500">UserId để đặt phòng</label>
-                                        <input
-                                            value={userId}
-                                            onChange={(event) => setUserId(event.target.value)}
-                                            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                                        />
-                                    </div>
-
                                     <button
                                         type="button"
-                                        onClick={() =>
+                                        onClick={() => {
+                                            if (!currentUser) {
+                                                alert("Vui lòng chọn user demo trước khi đặt phòng.");
+                                                return;
+                                            }
                                             navigate("/checkout", {
                                                 state: {
                                                     hotel,
                                                     room: roomList[0],
-                                                    userId,
+                                                    userId: currentUser.UserId,
                                                     checkInDate,
                                                     checkOutDate
                                                 }
-                                            })
-                                        }
+                                            });
+                                        }}
                                         className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold shadow-md shadow-amber-500/30"
                                     >
                                         Đặt nhanh phòng đầu tiên
@@ -274,17 +271,21 @@ export default function HotelDetailPage() {
                                                 <p className="mt-4 text-lg font-bold text-slate-900">{formatVnd(room.price)}<span className="text-sm text-slate-500 font-normal"> / đêm</span></p>
                                                 <button
                                                     type="button"
-                                                    onClick={() =>
+                                                    onClick={() => {
+                                                        if (!currentUser) {
+                                                            alert("Vui lòng chọn user demo trước khi đặt phòng.");
+                                                            return;
+                                                        }
                                                         navigate("/checkout", {
                                                             state: {
                                                                 hotel,
                                                                 room,
-                                                                userId,
+                                                                userId: currentUser.UserId,
                                                                 checkInDate,
                                                                 checkOutDate
                                                             }
-                                                        })
-                                                    }
+                                                        });
+                                                    }}
                                                     className="mt-4 w-full py-2.5 rounded-xl bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800"
                                                 >
                                                     Đặt phòng này

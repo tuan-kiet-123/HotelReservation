@@ -84,8 +84,58 @@ async function processCheckOut(input) {
     };
 }
 
+async function getReservations(filters = {}) {
+    const userId = filters.userId ? String(filters.userId).trim() : null;
+
+    const [rows] = await pool.query(
+        `
+        SELECT
+            r.ReservationId,
+            r.RoomId,
+            r.UserId,
+            r.CheckInDate,
+            r.CheckOutDate,
+            r.Status,
+            rm.HotelId AS HotelId,
+            rm.RoomType AS RoomType,
+            rm.CurrentPrice AS CurrentPrice,
+            GREATEST(DATEDIFF(r.CheckOutDate, r.CheckInDate), 1) AS Nights,
+            GREATEST(DATEDIFF(r.CheckOutDate, r.CheckInDate), 1) * rm.CurrentPrice AS TotalAmount,
+            COALESCE(SUM(p.Amount), 0) AS AmountPaid
+        FROM Reservation r
+        INNER JOIN Room rm ON rm.RoomId = r.RoomId
+        LEFT JOIN Payment p ON p.ReservationId = r.ReservationId AND p.Status = 'Completed'
+        WHERE (? IS NULL OR r.UserId = ?)
+        GROUP BY r.ReservationId, r.RoomId, r.UserId, r.CheckInDate, r.CheckOutDate, r.Status, rm.HotelId, rm.RoomType, rm.CurrentPrice
+        ORDER BY r.CheckInDate DESC
+        `,
+        [userId, userId]
+    );
+
+    return {
+        statusCode: 200,
+        message: "Get reservations successfully",
+        data: rows || []
+    };
+}
+
+async function cancelReservation(input) {
+    await pool.query("CALL sp_CancelReservation(?)", [input.reservationId]);
+
+    return {
+        statusCode: 200,
+        message: "Reservation cancelled",
+        data: {
+            reservationId: input.reservationId,
+            status: "Cancelled"
+        }
+    };
+}
+
 module.exports = {
     bookRoom,
     processCheckInPayment,
-    processCheckOut
+    processCheckOut,
+    cancelReservation,
+    getReservations
 };

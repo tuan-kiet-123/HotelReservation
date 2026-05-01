@@ -1,11 +1,11 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { Link } from "react-router";
 import { CalendarDays, ClipboardCheck, CircleDollarSign, LoaderCircle, LogIn, LogOut, MessageSquareHeart, OctagonX, ReceiptText } from "lucide-react";
 import { toast } from "sonner";
 import SiteShell from "../components/SiteShell";
 import ReviewFormOverlay from "../components/ReviewFormOverlay";
-import { createReview, processCheckInPayment, processCheckOut } from "../lib/api";
-import { getStoredBookings, setStoredBookings } from "../lib/bookingStorage";
+import { cancelReservation, createReview, fetchHotels, fetchReservations, processCheckInPayment, processCheckOut } from "../lib/api";
+import { useAuth } from "../lib/auth";
 
 function formatDateTime(value) {
     const date = new Date(value);
@@ -62,10 +62,12 @@ function calculateRefundPreview(booking) {
 }
 
 export default function MyBookingsPage() {
-    const [bookings, setBookings] = useState(getStoredBookings());
+    const { currentUser } = useAuth();
+    const [bookings, setBookings] = useState([]);
     const [workingReservation, setWorkingReservation] = useState("");
     const [cancelTarget, setCancelTarget] = useState(null);
     const [reviewTarget, setReviewTarget] = useState(null);
+    const [hotelMap, setHotelMap] = useState({});
 
     const summary = useMemo(() => {
         return {
@@ -76,17 +78,77 @@ export default function MyBookingsPage() {
         };
     }, [bookings]);
 
-    function commitBookings(nextBookings) {
-        setBookings(nextBookings);
-        setStoredBookings(nextBookings);
+    function updateOneBooking(reservationId, patch) {
+        setBookings((prev) =>
+            prev.map((item) => (item.reservationId === reservationId ? { ...item, ...patch } : item))
+        );
     }
 
-    function updateOneBooking(reservationId, patch) {
-        const next = bookings.map((item) =>
-            item.reservationId === reservationId ? { ...item, ...patch } : item
-        );
-        commitBookings(next);
+    async function loadBookings(userId) {
+        if (!userId) {
+            setBookings([]);
+            return;
+        }
+
+        try {
+            const data = await fetchReservations({ userId });
+            const mapped = data.map((row) => ({
+                reservationId: row.ReservationId,
+                roomId: row.RoomId,
+                roomLabel: row.RoomType || "",
+                userId: row.UserId,
+                userFullName: currentUser?.FullName || "",
+                hotelSqlId: row.HotelId,
+                hotelName: hotelMap[row.HotelId] || "",
+                checkInDate: row.CheckInDate,
+                checkOutDate: row.CheckOutDate,
+                pricePerNight: Number(row.CurrentPrice || 0),
+                nights: Number(row.Nights || 0),
+                totalAmount: Number(row.TotalAmount || 0),
+                amountPaid: Number(row.AmountPaid || 0),
+                status: row.Status,
+                reviewSubmitted: false
+            }));
+
+            setBookings(mapped);
+        } catch (error) {
+            toast.error(error?.response?.data?.message || error.message || "Không tải được danh sách đặt phòng");
+        }
     }
+
+    useEffect(() => {
+        let active = true;
+
+        async function loadHotels() {
+            try {
+                const hotels = await fetchHotels();
+                if (!active) return;
+                const map = {};
+                hotels.forEach((h) => {
+                    if (h?.SqlHotelId) {
+                        map[h.SqlHotelId] = h.Name || "";
+                    }
+                });
+                setHotelMap(map);
+            } catch (error) {
+                // ignore
+            }
+        }
+
+        loadHotels();
+        return () => {
+            active = false;
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!currentUser?.UserId) {
+            setBookings([]);
+            return;
+        }
+
+        loadBookings(currentUser.UserId);
+    }, [currentUser, hotelMap]);
 
     async function handleCheckIn(reservationId) {
         setWorkingReservation(reservationId);
@@ -130,23 +192,33 @@ export default function MyBookingsPage() {
         }
     }
 
-    function handleConfirmCancel() {
+    async function handleConfirmCancel() {
         if (!cancelTarget) {
             return;
         }
 
         const preview = calculateRefundPreview(cancelTarget);
 
-        updateOneBooking(cancelTarget.reservationId, {
-            status: "Cancelled",
-            cancelledAt: new Date().toISOString(),
-            refundAmount: preview.refund,
-            penaltyAmount: preview.penalty,
-            refundRule: preview.label
-        });
+        try {
+            const response = await cancelReservation({ reservationId: cancelTarget.reservationId });
 
-        toast.success("Đã hủy đơn và cập nhật trạng thái nội bộ ở frontend");
-        setCancelTarget(null);
+            if (!response?.success) {
+                throw new Error(response?.message || "Hủy đơn thất bại");
+            }
+
+            updateOneBooking(cancelTarget.reservationId, {
+                status: "Cancelled",
+                cancelledAt: new Date().toISOString(),
+                refundAmount: preview.refund,
+                penaltyAmount: preview.penalty,
+                refundRule: preview.label
+            });
+
+            toast.success("Đã hủy đơn và cập nhật trạng thái trong DB");
+            setCancelTarget(null);
+        } catch (error) {
+            toast.error(error?.response?.data?.message || error.message || "Hủy đơn không thành công");
+        }
     }
 
     async function submitReview(payload) {
@@ -210,7 +282,7 @@ export default function MyBookingsPage() {
                         <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-8 text-center shadow-sm">
                             <ReceiptText className="w-10 h-10 mx-auto text-slate-400" />
                             <h2 className="mt-3 text-xl font-semibold text-slate-800">Bạn chưa có đơn đặt phòng nào</h2>
-                            <p className="mt-2 text-sm text-slate-500">Hãy đặt phòng trước, sau đó quay lại trang này để test check-in/check-out/review.</p>
+                            <p className="mt-2 text-sm text-slate-500">Chọn user demo để xem các đơn từ DB, sau đó test check-in/check-out/review.</p>
                             <Link
                                 to="/hotels/69ca837d9a90b3531e860c22"
                                 className="inline-flex mt-5 px-5 py-2.5 rounded-xl bg-slate-900 text-white font-medium"
@@ -233,8 +305,8 @@ export default function MyBookingsPage() {
                                         </div>
 
                                         <div className="grid sm:grid-cols-2 gap-x-8 gap-y-2 text-sm text-slate-600">
-                                            <p><span className="font-medium text-slate-700">Reservation:</span> {booking.reservationId}</p>
-                                            <p><span className="font-medium text-slate-700">Room:</span> {booking.roomId}</p>
+                                            <p><span className="font-medium text-slate-700">Khách hàng:</span> {booking.userFullName || booking.userId || "-"}</p>
+                                            <p><span className="font-medium text-slate-700">Phòng:</span> {booking.roomLabel || booking.roomId}</p>
                                             <p className="flex items-center gap-1"><CalendarDays className="w-4 h-4 text-amber-500" /> {formatDateTime(booking.checkInDate)}</p>
                                             <p className="flex items-center gap-1"><CalendarDays className="w-4 h-4 text-amber-500" /> {formatDateTime(booking.checkOutDate)}</p>
                                             <p><span className="font-medium text-slate-700">Đã thanh toán:</span> {formatVnd(booking.amountPaid)}</p>
@@ -312,7 +384,7 @@ export default function MyBookingsPage() {
                     <div className="fixed inset-0 z-[60] bg-slate-950/65 backdrop-blur-sm flex items-center justify-center p-4">
                         <div className="w-full max-w-md rounded-2xl bg-white border border-slate-200 shadow-xl p-6">
                             <h3 className="text-lg font-semibold text-slate-900">Xác nhận hủy đơn</h3>
-                            <p className="text-sm text-slate-600 mt-2">Reservation: {cancelTarget.reservationId}</p>
+                            <p className="text-sm text-slate-600 mt-2">Đơn đặt: ẩn (hiển thị trong thông báo)</p>
 
                             <div className="mt-4 rounded-xl bg-amber-50 border border-amber-200 p-4 text-sm">
                                 {(() => {

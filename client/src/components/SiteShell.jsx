@@ -1,11 +1,11 @@
 import React, { useState } from "react";
 import { NavLink } from "react-router";
 import { Menu, X, MapPin, Mail, Phone, Globe, Link2, ExternalLink } from "lucide-react";
+import { useAuth } from "../lib/auth";
 
 const navLinks = [
     { to: "/", label: "Trang chủ" },
     { to: "/hotels/69ca837d9a90b3531e860c22", label: "Chi tiết KS" },
-    { to: "/checkout", label: "Thanh toán" },
     { to: "/my-bookings", label: "Đơn đặt phòng" }
 ];
 
@@ -28,6 +28,7 @@ function LinkItem({ to, label, onClick }) {
 
 export default function SiteShell({ children }) {
     const [mobileOpen, setMobileOpen] = useState(false);
+    const { currentUser, listDemoUsers, switchUser, logout } = useAuth();
 
     return (
         <div className="min-h-screen bg-slate-50 flex flex-col">
@@ -47,12 +48,30 @@ export default function SiteShell({ children }) {
                     </nav>
 
                     <div className="hidden md:flex items-center gap-3">
-                        <button className="px-4 py-2 text-sm font-medium text-white/80 hover:text-white transition-colors cursor-pointer">
-                            Đăng ký
-                        </button>
-                        <button className="px-5 py-2 text-sm font-semibold text-white bg-gradient-to-r from-amber-500 to-orange-400 rounded-full hover:from-amber-600 hover:to-orange-500 shadow-md shadow-amber-500/30 transition-all duration-300 cursor-pointer">
-                            Đăng nhập
-                        </button>
+                        {!currentUser ? (
+                            <select
+                                onChange={(e) => switchUser(e.target.value)}
+                                defaultValue=""
+                                className="rounded-lg px-3 py-2 text-sm bg-slate-800 text-white border border-white/10"
+                            >
+                                <option value="">Chọn user demo</option>
+                                {listDemoUsers().map((u) => (
+                                    <option key={u.UserId} value={u.UserId}>
+                                        {u.FullName} ({u.UserId})
+                                    </option>
+                                ))}
+                            </select>
+                        ) : (
+                            <div className="flex items-center gap-3">
+                                <span className="text-sm text-white/90">Xin chào, {currentUser.FullName}</span>
+                                <button
+                                    onClick={logout}
+                                    className="px-4 py-2 text-sm font-medium text-white/80 hover:text-white transition-colors"
+                                >
+                                    Đăng xuất
+                                </button>
+                            </div>
+                        )}
                     </div>
 
                     <button

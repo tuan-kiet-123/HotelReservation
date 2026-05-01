@@ -1,8 +1,10 @@
--- Active: 1774776786163@@mysql-13d42b0b-hotelreservation.j.aivencloud.com@19897@hotelreservation
+-- Active: 1774795763812@@mysql-13d42b0b-hotelreservation.j.aivencloud.com@19897@hotelreservation
 DELIMITER $$
 
 DROP PROCEDURE IF EXISTS SP_Generate_QuarterlyReport$$
+
 DROP PROCEDURE IF EXISTS SP_Generate_QuarterlyTop3Rooms$$
+
 CREATE PROCEDURE SP_Generate_QuarterlyTop3Rooms(
 	IN p_year INT,
 	IN p_quarter TINYINT
@@ -102,6 +104,7 @@ BEGIN
 END$$
 
 DROP PROCEDURE IF EXISTS SP_Generate_QuarterlyRefundRatio$$
+
 CREATE PROCEDURE SP_Generate_QuarterlyRefundRatio(
 	IN p_year INT,
 	IN p_quarter TINYINT
@@ -197,6 +200,7 @@ BEGIN
 END$$
 
 DROP PROCEDURE IF EXISTS SP_Generate_QuarterlyADRRevPAR$$
+
 CREATE PROCEDURE SP_Generate_QuarterlyADRRevPAR(
 	IN p_year INT,
 	IN p_quarter TINYINT
@@ -388,9 +392,11 @@ BEGIN
 	DROP TEMPORARY TABLE IF EXISTS tmp_hotel_inventory;
 END$$
 
-DELIMITER ;
+DELIMITER;
 
-DELIMITER //
+DELIMITER /
+/
+
 CREATE PROCEDURE sp_BookRoom (
 		IN p_RoomId VARCHAR(255),
 		IN p_UserId VARCHAR(255),
@@ -466,10 +472,15 @@ BEGIN
 						END IF;
 				END IF;
 		END IF;
-END //
-DELIMITER ;
+END
+/
+/
 
-DELIMITER //
+DELIMITER;
+
+DELIMITER /
+/
+
 CREATE PROCEDURE sp_ProcessCheckIn (
 		IN p_ReservationId VARCHAR(255)
 )
@@ -530,10 +541,14 @@ BEGIN
 				COMMIT;
 				SELECT 'HTTP 200: Check-in thành công!' AS Message, v_RemainingAmount AS AmountCollected;
 		END IF;
-END //
-DELIMITER ;
+END
+/
+/
+
+DELIMITER;
 
 DELIMITER $$
+
 CREATE PROCEDURE `sp_CancelReservation` (IN `p_ReservationId` VARCHAR(255))   BEGIN
 		DECLARE v_CheckInDate DATETIME;
 		DECLARE v_TotalPaid DECIMAL(15,2);
@@ -542,13 +557,16 @@ CREATE PROCEDURE `sp_CancelReservation` (IN `p_ReservationId` VARCHAR(255))   BE
 		DECLARE v_RefundAmount DECIMAL(15,2) DEFAULT 0;
 		DECLARE v_PenaltyAmount DECIMAL(15,2) DEFAULT 0;
 		DECLARE v_RoomId VARCHAR(255);
+		DECLARE v_RefundId VARCHAR(10);
 
 		SELECT CheckInDate, RoomId INTO v_CheckInDate, v_RoomId
-		FROM Reservation WHERE ReservationId = p_ReservationId;
+		FROM Reservation
+		WHERE ReservationId = CONVERT(p_ReservationId USING utf8mb4) COLLATE utf8mb4_general_ci;
 
 		SELECT SUM(Amount) INTO v_TotalPaid 
 		FROM Payment 
-		WHERE ReservationId = p_ReservationId AND Status = 'Completed';
+		WHERE ReservationId = CONVERT(p_ReservationId USING utf8mb4) COLLATE utf8mb4_general_ci
+			AND Status = 'Completed';
 
 		SET v_DaysBefore = DATEDIFF(v_CheckInDate, NOW());
 
@@ -566,20 +584,24 @@ CREATE PROCEDURE `sp_CancelReservation` (IN `p_ReservationId` VARCHAR(255))   BE
 		END IF;
 
 		START TRANSACTION;
-				UPDATE Reservation SET Status = 'Cancelled' WHERE ReservationId = p_ReservationId;
+				UPDATE Reservation
+				SET Status = 'Cancelled'
+				WHERE ReservationId = CONVERT(p_ReservationId USING utf8mb4) COLLATE utf8mb4_general_ci;
         
 				UPDATE Room SET Status = 1 WHERE RoomId = v_RoomId;
 
 				IF v_TotalPaid > 0 THEN
+						SET v_RefundId = SUBSTRING(REPLACE(UUID(), '-', ''), 1, 10);
 						INSERT INTO Refund (RefundId, ReservationId, RefundAmount, PenaltyAmount, ProcessedAt)
-						VALUES (UUID(), p_ReservationId, v_RefundAmount, v_PenaltyAmount, NOW());
+						VALUES (v_RefundId, CONVERT(p_ReservationId USING utf8mb4) COLLATE utf8mb4_general_ci, v_RefundAmount, v_PenaltyAmount, NOW());
 				END IF;
 		COMMIT;
 END$$
 
-DELIMITER ;
+DELIMITER;
 
 DELIMITER $$
+
 CREATE PROCEDURE `sp_SearchAvailableRooms`(
 		IN p_CheckIn DATETIME,
 		IN p_CheckOut DATETIME,
@@ -596,4 +618,5 @@ BEGIN
 			AND r.CurrentPrice <= p_MaxPrice
 			AND fn_CheckRoomAvailability(r.RoomId, p_CheckIn, p_CheckOut) = TRUE;
 END$$
-DELIMITER ;
+
+DELIMITER;
