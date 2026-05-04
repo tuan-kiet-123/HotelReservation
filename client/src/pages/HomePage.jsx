@@ -1,13 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { Search, MapPin, Hotel, Globe, Link2, ExternalLink, Phone, Mail, Church, User, Menu, X, CalendarDays, Users, ChevronLeft, ChevronRight, Minus, Plus } from 'lucide-react'
-import { NavLink } from 'react-router'
-
-const navLinks = [
-    { to: '/', label: 'Trang chủ' },
-    { to: '/search', label: 'Tìm kiếm' },
-    { to: '/offers', label: 'Ưu đãi' },
-    { to: '/contact', label: 'Liên hệ' },
-]
+import { Search, CalendarDays, Users, ChevronLeft, ChevronRight, Minus, Plus } from 'lucide-react'
+import SiteShell from '../components/SiteShell'
 
 const DAYS_VN = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN']
 const MONTHS_VN = ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6', 'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12']
@@ -36,7 +29,6 @@ const isSameDay = (a, b) => a && b && a.getDate() === b.getDate() && a.getMonth(
 
 const HomePage = () => {
     const [searchQuery, setSearchQuery] = useState('')
-    const [mobileOpen, setMobileOpen] = useState(false)
 
     // Date picker state
     const today = new Date()
@@ -151,82 +143,8 @@ const HomePage = () => {
     }
 
     return (
-        <div className="min-h-screen bg-background flex flex-col">
-
-            {/* ===== HEADER ===== */}
-            <header className="fixed top-0 left-0 right-0 z-50 h-16 bg-slate-900 backdrop-blur-xl border-b border-white/10">
-                <div className="max-w-7xl mx-auto px-4 h-full flex items-center justify-between">
-                    <NavLink to="/" className="flex items-center gap-2 text-xl font-bold text-white tracking-tight">
-                        <img src="Logo.png" alt="Logo" className="w-8 h-8 object-contain" />
-                        <span>DaVinci<span className="text-amber-400">Resort</span></span>
-                    </NavLink>
-
-                    <nav className="hidden md:flex items-center gap-1">
-                        {navLinks.map((link) => (
-                            <NavLink
-                                key={link.to}
-                                to={link.to}
-                                className={({ isActive }) =>
-                                    `px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ${isActive
-                                        ? 'bg-white/15 text-amber-400'
-                                        : 'text-white/80 hover:text-white hover:bg-white/10'
-                                    }`
-                                }
-                            >
-                                {link.label}
-                            </NavLink>
-                        ))}
-                    </nav>
-
-                    <div className="hidden md:flex items-center gap-3">
-                        <button className="px-4 py-2 text-sm font-medium text-white/80 hover:text-white transition-colors cursor-pointer">
-                            Đăng ký
-                        </button>
-                        <button className="px-5 py-2 text-sm font-semibold text-white bg-gradient-to-r from-amber-500 to-orange-400 rounded-full hover:from-amber-600 hover:to-orange-500 shadow-md shadow-amber-500/30 transition-all duration-300 cursor-pointer">
-                            Đăng nhập
-                        </button>
-                    </div>
-
-                    <button
-                        className="md:hidden p-2 text-white/80 hover:text-white cursor-pointer"
-                        onClick={() => setMobileOpen(!mobileOpen)}
-                    >
-                        {mobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-                    </button>
-                </div>
-
-                {mobileOpen && (
-                    <div className="md:hidden absolute top-16 left-0 right-0 bg-slate-900/95 backdrop-blur-xl border-b border-white/10 shadow-lg">
-                        <nav className="flex flex-col p-4 gap-1">
-                            {navLinks.map((link) => (
-                                <NavLink
-                                    key={link.to}
-                                    to={link.to}
-                                    onClick={() => setMobileOpen(false)}
-                                    className={({ isActive }) =>
-                                        `px-4 py-3 rounded-lg text-sm font-medium transition-colors ${isActive
-                                            ? 'bg-white/15 text-amber-400'
-                                            : 'text-white/80 hover:bg-white/10'
-                                        }`
-                                    }
-                                >
-                                    {link.label}
-                                </NavLink>
-                            ))}
-                            <hr className="my-2 border-white/10" />
-                            <button className="px-4 py-3 text-sm font-medium text-white/80 text-left hover:bg-white/10 rounded-lg cursor-pointer">
-                                Đăng nhập
-                            </button>
-                            <button className="mx-4 mt-1 py-3 text-sm font-semibold text-white bg-gradient-to-r from-amber-500 to-orange-400 rounded-full text-center cursor-pointer">
-                                Đặt phòng
-                            </button>
-                        </nav>
-                    </div>
-                )}
-            </header>
-
-            {/* ===== MAIN CONTENT ===== */}
-            <main className="flex-1 pt-16 flex flex-col">
+        <SiteShell>
+            <main className="flex-1 flex flex-col">
                 {/* Hero Section */}
                 <section className="relative w-full flex-1 min-h-[calc(100vh-4rem)] flex items-center justify-center bg-[url('/bg_HomePage.jpg')] bg-cover bg-center bg-no-repeat">
                     <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-[1px]"></div>
@@ -364,120 +282,7 @@ const HomePage = () => {
                     </div>
                 </section>
             </main>
-
-            {/* ===== FOOTER ===== */}
-            <footer className="bg-slate-900 text-slate-300">
-                <div className="max-w-7xl mx-auto px-4 py-16">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-12">
-                        {/* Brand */}
-                        <div className="flex flex-col gap-4">
-                            <NavLink to="/" className="flex items-center gap-2 text-xl font-bold text-white tracking-tight">
-                                <img src="Logo.png" alt="Logo" className="w-8 h-8 object-contain drop-shadow-md" />
-                                <span>DaVinci<span className="text-amber-400">Resort</span></span>
-                            </NavLink>
-                            <p className="text-sm leading-relaxed text-slate-400">
-                                Nền tảng đặt phòng khách sạn nghỉ dưỡng hàng đầu Tôn Đức Thắng University. Trải nghiệm dịch vụ 5 sao với mức giá tốt nhất.
-                            </p>
-                            <div className="flex gap-3 mt-2">
-                                {[Globe, Link2, ExternalLink].map((Icon, i) => (
-                                    <a key={i} href="#" className="w-9 h-9 flex items-center justify-center rounded-full bg-slate-800 text-slate-400 hover:bg-amber-500 hover:text-white transition-all duration-300">
-                                        <Icon className="w-4 h-4" />
-                                    </a>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Liên hệ 1 */}
-                        <div>
-                            <h4 className="text-white font-semibold mb-5 text-sm uppercase tracking-wider">Châu Âu</h4>
-                            <ul className="flex flex-col gap-4">
-                                <li className="flex items-center gap-3 text-sm">
-                                    <MapPin className="w-4 h-4 text-amber-400 shrink-0" />
-                                    <span>Santiago Bernabeu Hotel</span>
-                                </li>
-                                <li className="flex items-center gap-3 text-sm">
-                                    <MapPin className="w-4 h-4 text-amber-400 shrink-0" />
-                                    <span>Emirates Resort</span>
-                                </li>
-                                <li className="flex items-start gap-3 text-sm">
-                                    <MapPin className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
-                                    <span>Stamford Bridge Motel</span>
-                                </li>
-                                <li className="flex items-start gap-3 text-sm">
-                                    <MapPin className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
-                                    <span>Old Trafforf Pub</span>
-                                </li>
-                            </ul>
-                        </div>
-
-                        {/* Liên hệ 2 */}
-                        <div>
-                            <h4 className="text-white font-semibold mb-5 text-sm uppercase tracking-wider">Châu Á</h4>
-                            <ul className="flex flex-col gap-4">
-                                <li className="flex items-center gap-3 text-sm">
-                                    <Church className="w-4 h-4 text-amber-400 shrink-0" />
-                                    <span>Lâu đài Matsumoto</span>
-                                </li>
-                                <li className="flex items-center gap-3 text-sm">
-                                    <Church className="w-4 h-4 text-amber-400 shrink-0" />
-                                    <span>Cung Gyeongbok</span>
-                                </li>
-                                <li className="flex items-center gap-3 text-sm">
-                                    <Church className="w-4 h-4 text-amber-400 shrink-0" />
-                                    <span>Đền Taj Mahal</span>
-                                </li>
-                                <li className="flex items-center gap-3 text-sm">
-                                    <Church className="w-4 h-4 text-amber-400 shrink-0" />
-                                    <span>Chùa Bà Đen</span>
-                                </li>
-                            </ul>
-                        </div>
-
-                        {/* Liên hệ 3 */}
-                        <div>
-                            <h4 className="text-white font-semibold mb-5 text-sm uppercase tracking-wider">Liên hệ</h4>
-                            <ul className="flex flex-col gap-4">
-                                <li className="flex items-center gap-3 text-sm">
-                                    <User className="w-4 h-4 text-amber-400 shrink-0" />
-                                    <span>Phan Đình Phú</span>
-                                </li>
-                                <li className="flex items-center gap-3 text-sm">
-                                    <Mail className="w-4 h-4 text-amber-400 shrink-0" />
-                                    <span>52300051@student.tdtu.edu.vn</span>
-                                </li>
-                                <li className="flex items-center gap-3 text-sm">
-                                    <User className="w-4 h-4 text-amber-400 shrink-0" />
-                                    <span>Ngô Xuân Quang</span>
-                                </li>
-                                <li className="flex items-center gap-3 text-sm">
-                                    <Mail className="w-4 h-4 text-amber-400 shrink-0" />
-                                    <span>52300055@student.tdtu.edu.vn</span>
-                                </li>
-                                <li className="flex items-center gap-3 text-sm">
-                                    <User className="w-4 h-4 text-amber-400 shrink-0" />
-                                    <span>Trần Tuấn Kiệt</span>
-                                </li>
-                                <li className="flex items-center gap-3 text-sm">
-                                    <Mail className="w-4 h-4 text-amber-400 shrink-0" />
-                                    <span>52300040@student.tdtu.edu.vn</span>
-                                </li>
-                                <li className="flex items-start gap-3 text-sm">
-                                    <MapPin className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
-                                    <span>19 Nguyễn Hữu Thọ, Phường Tân Hưng, TP Hồ Chí Minh, Việt Nam</span>
-                                </li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="border-t border-slate-800">
-                    <div className="max-w-7xl mx-auto px-4 py-5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
-                        <p>&copy; {new Date().getFullYear()} DaVinciResort. All rights reserved.</p>
-                        <p>Made by Team DaVinci</p>
-                    </div>
-                </div>
-            </footer>
-        </div>
+        </SiteShell>
     )
 }
 

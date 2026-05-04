@@ -1,6 +1,7 @@
 DELIMITER $$
 
 DROP TRIGGER IF EXISTS TRG_AutoLog_Payment$$
+
 CREATE TRIGGER TRG_AutoLog_Payment
 AFTER INSERT ON Payment
 FOR EACH ROW
@@ -35,6 +36,7 @@ BEGIN
 END$$
 
 DROP TRIGGER IF EXISTS TRG_AutoLog_Refund$$
+
 CREATE TRIGGER TRG_AutoLog_Refund
 AFTER INSERT ON Refund
 FOR EACH ROW
@@ -79,6 +81,7 @@ BEGIN
 END$$
 
 DROP TRIGGER IF EXISTS TRG_AuditPriceChange$$
+
 CREATE TRIGGER TRG_AuditPriceChange
 AFTER UPDATE ON Room
 FOR EACH ROW
@@ -104,24 +107,6 @@ BEGIN
 	END IF;
 END$$
 
-DELIMITER ;
+DELIMITER;
 
-DELIMITER $$
-CREATE TRIGGER `tr_AfterRefund_InsertLedger` AFTER INSERT ON `refund` FOR EACH ROW BEGIN
-		INSERT INTO FinancialLedger (
-				LedgerId, 
-				ReferenceId, 
-				DebitAmount, 
-				CreditAmount, 
-				Date
-		)
-		VALUES (
-				UUID(), 
-				NEW.RefundId,
-				0,
-				NEW.RefundAmount,
-				NOW()
-		);
-END
-$$
-DELIMITER ;
+DROP TRIGGER IF EXISTS tr_AfterRefund_InsertLedger$$

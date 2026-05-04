@@ -89,8 +89,46 @@ async function processCheckOut(req, res, next) {
   }
 }
 
+async function getReservations(req, res, next) {
+  try {
+    const result = await bookingService.getReservations({
+      userId: req.query.userId
+    });
+
+    if (result.statusCode >= 400) {
+      return fail(res, result.message, result.statusCode, result.data);
+    }
+
+    return success(res, result.data, result.message, result.statusCode);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function cancelReservation(req, res, next) {
+  try {
+    const { reservationId } = req.body;
+
+    if (!reservationId) {
+      return fail(res, "reservationId is required", 400);
+    }
+
+    const result = await bookingService.cancelReservation({ reservationId });
+
+    if (result.statusCode >= 400) {
+      return fail(res, result.message, result.statusCode, result.data);
+    }
+
+    return success(res, result.data, result.message, result.statusCode);
+  } catch (error) {
+    return next(error);
+  }
+}
+
 module.exports = {
   bookRoom,
   processCheckInPayment,
-  processCheckOut
+  processCheckOut,
+  cancelReservation,
+  getReservations
 };

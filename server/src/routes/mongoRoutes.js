@@ -1,6 +1,7 @@
 const express = require("express");
 const hotelController = require("../controllers/mongo/hotelController");
 const reviewController = require("../controllers/mongo/reviewController");
+const userController = require("../controllers/mongo/userController");
 
 const router = express.Router();
 
@@ -16,5 +17,7 @@ router.get("/reviews", reviewController.getReviews);
 router.post("/reviews", reviewController.createReview);
 router.put("/reviews/:id", reviewController.updateReview);
 router.delete("/reviews/:id", reviewController.deleteReview);
+
+router.get("/users", userController.getUsers);
 
 module.exports = router;
