@@ -5,7 +5,7 @@ import { useAuth } from "../lib/auth";
 
 const navLinks = [
     { to: "/", label: "Trang chủ" },
-    { to: "/hotels/69ca837d9a90b3531e860c22", label: "Chi tiết KS" },
+    { to: "/hotels", label: "Chi tiết KS" },
     { to: "/my-bookings", label: "Đơn đặt phòng" }
 ];
 

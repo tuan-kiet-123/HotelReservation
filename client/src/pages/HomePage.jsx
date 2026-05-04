@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import axios from 'axios'
+import { useNavigate } from 'react-router'
 import { Search, CalendarDays, Users, ChevronLeft, ChevronRight, Minus, Plus, MapPin } from 'lucide-react'
 import SiteShell from '../components/SiteShell'
 
@@ -29,6 +30,7 @@ const getDayName = (date) => {
 const isSameDay = (a, b) => a && b && a.getDate() === b.getDate() && a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear()
 
 const HomePage = () => {
+    const navigate = useNavigate();
     const [searchQuery, setSearchQuery] = useState('')
     const [suggestions, setSuggestions] = useState([])
     const [showSuggestions, setShowSuggestions] = useState(false)
@@ -208,7 +210,14 @@ const HomePage = () => {
                                         className="w-full bg-transparent outline-none text-slate-700 placeholder:text-slate-400 text-base"
                                     />
                                 </div>
-                                <button className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-orange-400 hover:from-amber-600 hover:to-orange-500 text-white font-semibold px-8 py-4 m-1.5 rounded-full transition-all duration-300 cursor-pointer shrink-0">
+                                <button 
+                                    onClick={() => {
+                                        const params = new URLSearchParams();
+                                        if (searchQuery.trim()) params.append('q', searchQuery.trim());
+                                        navigate(`/hotels?${params.toString()}`);
+                                    }}
+                                    className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-orange-400 hover:from-amber-600 hover:to-orange-500 text-white font-semibold px-8 py-4 m-1.5 rounded-full transition-all duration-300 cursor-pointer shrink-0"
+                                >
                                     <Search className="w-4 h-4" />
                                     Search
                                 </button>
