@@ -89,10 +89,23 @@ async function deleteHotel(id) {
   return Hotel.findByIdAndDelete(id);
 }
 
+async function getHotelSuggestions(keyword) {
+  if (!keyword) return [];
+  return Hotel.find({
+    $or: [
+      { Name: { $regex: keyword, $options: 'i' } },
+      { Location: { $regex: keyword, $options: 'i' } }
+    ]
+  })
+  .select('_id Name Location')
+  .limit(5);
+}
+
 module.exports = {
   createHotel,
   getHotels,
   getHotelById,
   updateHotel,
-  deleteHotel
+  deleteHotel,
+  getHotelSuggestions
 };

@@ -7,6 +7,7 @@ const router = express.Router();
 
 router.get("/hotels", hotelController.getHotels);
 router.post("/hotels", hotelController.createHotel);
+router.get("/hotels/suggestions", hotelController.getHotelSuggestions);
 router.get("/hotels/:id", hotelController.getHotelById);
 router.get("/hotels/:hotelId/reviews", reviewController.getReviewsByHotel);
 router.get("/hotels/:hotelId/average-rating", reviewController.getHotelAverageRatingReport);

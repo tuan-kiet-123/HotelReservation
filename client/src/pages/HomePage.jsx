@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { Search, CalendarDays, Users, ChevronLeft, ChevronRight, Minus, Plus } from 'lucide-react'
+import axios from 'axios'
+import { Search, CalendarDays, Users, ChevronLeft, ChevronRight, Minus, Plus, MapPin } from 'lucide-react'
 import SiteShell from '../components/SiteShell'
 
 const DAYS_VN = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN']
@@ -29,6 +30,9 @@ const isSameDay = (a, b) => a && b && a.getDate() === b.getDate() && a.getMonth(
 
 const HomePage = () => {
     const [searchQuery, setSearchQuery] = useState('')
+    const [suggestions, setSuggestions] = useState([])
+    const [showSuggestions, setShowSuggestions] = useState(false)
+    const searchRef = useRef(null)
 
     // Date picker state
     const today = new Date()
@@ -53,10 +57,36 @@ const HomePage = () => {
         const handleClick = (e) => {
             if (dateRef.current && !dateRef.current.contains(e.target)) setShowDatePicker(false)
             if (guestRef.current && !guestRef.current.contains(e.target)) setShowGuestPicker(false)
+            if (searchRef.current && !searchRef.current.contains(e.target)) setShowSuggestions(false)
         }
         document.addEventListener('mousedown', handleClick)
         return () => document.removeEventListener('mousedown', handleClick)
     }, [])
+
+    // Fetch suggestions (debounced)
+    useEffect(() => {
+        const fetchSuggestions = async () => {
+            if (!searchQuery.trim()) {
+                setSuggestions([]);
+                return;
+            }
+            try {
+                // Fetch up to 5 hotel suggestions
+                const res = await axios.get(`http://localhost:5000/api/mongo/hotels/suggestions?q=${encodeURIComponent(searchQuery)}`);
+                if (res.data.success) {
+                    setSuggestions(res.data.data);
+                }
+            } catch (error) {
+                console.error("Failed to fetch suggestions:", error);
+            }
+        };
+
+        const timerId = setTimeout(() => {
+            fetchSuggestions();
+        }, 300); // 300ms debounce
+
+        return () => clearTimeout(timerId);
+    }, [searchQuery]);
 
     // Calendar navigation
     const nextMonth2 = calMonth === 11 ? 0 : calMonth + 1
@@ -160,15 +190,21 @@ const HomePage = () => {
                         </div>
 
                         {/* Search Bar */}
-                        <div className="w-full max-w-2xl">
-                            <div className="flex items-center bg-white rounded-full shadow-xl overflow-hidden transition-all duration-300 hover:shadow-2xl">
+                        <div className="w-full max-w-2xl relative" ref={searchRef}>
+                            <div className="flex items-center bg-white rounded-full shadow-xl overflow-hidden transition-all duration-300 hover:shadow-2xl relative z-20">
                                 <div className="flex items-center gap-3 flex-1 px-6 py-4">
                                     <Search className="w-5 h-5 text-slate-400 shrink-0" />
                                     <input
                                         type="text"
                                         placeholder="Tìm theo tên khách sạn, địa điểm..."
                                         value={searchQuery}
-                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        onChange={(e) => {
+                                            setSearchQuery(e.target.value);
+                                            setShowSuggestions(true);
+                                        }}
+                                        onFocus={() => {
+                                            if (searchQuery.trim()) setShowSuggestions(true);
+                                        }}
                                         className="w-full bg-transparent outline-none text-slate-700 placeholder:text-slate-400 text-base"
                                     />
                                 </div>
@@ -177,6 +213,30 @@ const HomePage = () => {
                                     Search
                                 </button>
                             </div>
+                            
+                            {/* Autocomplete Dropdown */}
+                            {showSuggestions && suggestions.length > 0 && (
+                                <div className="absolute top-[calc(100%-1.5rem)] pt-8 left-0 right-0 bg-white rounded-b-3xl shadow-2xl border-t border-slate-100 overflow-hidden z-10">
+                                    {suggestions.map((item, idx) => (
+                                        <button 
+                                            key={item._id || idx}
+                                            onClick={() => {
+                                                setSearchQuery(item.Name);
+                                                setShowSuggestions(false);
+                                            }}
+                                            className="w-full text-left px-6 py-3 hover:bg-slate-50 transition-colors flex items-center gap-4 border-b border-slate-50 last:border-0 cursor-pointer"
+                                        >
+                                            <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center shrink-0">
+                                                <MapPin className="w-5 h-5 text-amber-500" />
+                                            </div>
+                                            <div>
+                                                <p className="text-sm font-semibold text-slate-800">{item.Name}</p>
+                                                <p className="text-xs text-slate-500">{item.Location}</p>
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                         </div>
 
                         {/* Date & Guest Pickers */}
