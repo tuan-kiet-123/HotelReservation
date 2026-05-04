@@ -1,3 +1,5 @@
+const dns = require('dns');
+dns.setServers(['8.8.8.8', '8.8.4.4']); // Fix lỗi DNS của VNPT chặn querySrv MongoDB
 const app = require("./app");
 const env = require("./config/env");
 const { connectMongo } = require("./config/mongo");

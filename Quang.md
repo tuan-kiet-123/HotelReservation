@@ -21,8 +21,12 @@
 
 
 ## 3. Trang HomePage
-- Thanh tìm kiếm khách sạn
-- Heading "Tìm kiếm khách sạn hoàn hảo cho kỳ nghỉ của bạn"
-- Subheading "Khám phá hàng ngàn khách sạn trên khắp thế giới"
-- Quick filter chips — Nha Trang, Đà Nẵng, Phú Quốc, Hội An, Đà Lạt (có icon MapPin)
-- Stats bar hiển thị số liệu (500+ Khách sạn, 10K+ Đánh giá...)
+- **Header**: Thanh điều hướng trong suốt (glassmorphism), Logo hình ảnh, nút Đăng ký (hover effect) và Đăng nhập (nền gradient amber). Có menu cho Mobile.
+- **Hero Section**: 
+  - Ảnh nền tràn màn hình `bg_HomePage.jpg` với màng đen mờ (`backdrop-blur`).
+  - Tiêu đề chính và các thanh công cụ được đưa lên vị trí trung tâm.
+  - **Thanh tìm kiếm**: Thiết kế bo tròn với nút Search nổi bật.
+  - **Date Picker (Chọn ngày)**: Widget chọn ngày tích hợp 1 lịch duy nhất cho phép click lần 1 chọn ngày Check-in (màu amber), click lần 2 chọn ngày Check-out (màu emerald). 
+  - **Guest Picker (Chọn số lượng)**: Dropdown popup cho phép chỉnh số lượng Phòng, Người lớn (18+), Trẻ em (0-17) qua các nút tăng giảm (+/-).
+  - Tự động đóng popup lịch/guest khi click ra ngoài (`useRef` + `useEffect`).
+- **Footer**: Giao diện chân trang đa cột, cung cấp danh sách địa chỉ khách sạn tại Châu Âu, Châu Á, và thông tin liên hệ của nhóm phát triển (Quang, Kiệt, Phú).
