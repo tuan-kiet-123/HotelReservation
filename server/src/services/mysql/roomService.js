@@ -1,4 +1,4 @@
-const pool = require("../../config/mysql");
+const { pool } = require("../../config/mysql");
 
 async function createRoom(roomData) {
   const { RoomId, HotelId, RoomType, BasePrice, CurrentPrice, Status = 1 } = roomData;
