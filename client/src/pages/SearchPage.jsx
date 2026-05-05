@@ -125,16 +125,6 @@ const SearchPage = () => {
                                     ))}
                                 </div>
                             </div>
-
-                            {/* Lọc theo giá */}
-                            <div className="filter-section">
-                                <h4>Khoảng giá (mỗi đêm)</h4>
-                                <input type="range" min="0" max="20000000" />
-                                <div className="range-labels">
-                                    <span>0đ</span>
-                                    <span>20.000.000đ+</span>
-                                </div>
-                            </div>
                         </div>
                     </aside>
 

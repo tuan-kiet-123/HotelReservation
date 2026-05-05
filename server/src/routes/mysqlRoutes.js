@@ -1,8 +1,11 @@
 const express = require("express");
 const reportController = require("../controllers/mysql/reportController");
 const bookingController = require("../controllers/mysql/bookingController");
+const roomController = require("../controllers/mysql/roomController");
 
 const router = express.Router();
+
+router.post("/rooms", roomController.createRoom);
 
 router.get("/reports/top3-rooms", reportController.getQuarterlyTop3RoomsReport);
 router.get("/reports/refund-ratio", reportController.getQuarterlyRefundRatioReport);
