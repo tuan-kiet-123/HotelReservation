@@ -6,20 +6,38 @@ import SiteShell from '../components/SiteShell';
 import './SearchPage.css';
 
 const SearchPage = () => {
-    const [searchParams] = useSearchParams();
+    const [searchParams, setSearchParams] = useSearchParams();
     const query = searchParams.get('q') || '';
+    
+    // Đọc params từ URL, nếu không có thì lấy mặc định
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    const initialCheckIn = searchParams.get('checkIn') ? new Date(searchParams.get('checkIn')) : today;
+    const initialCheckOut = searchParams.get('checkOut') ? new Date(searchParams.get('checkOut')) : tomorrow;
+    const initialRoomType = searchParams.get('roomType') || 'Standard';
+
     const [searchName, setSearchName] = useState(query);
+    const [checkIn, setCheckIn] = useState(initialCheckIn.toISOString().split('T')[0]);
+    const [checkOut, setCheckOut] = useState(initialCheckOut.toISOString().split('T')[0]);
+    const [roomType, setRoomType] = useState(initialRoomType);
 
     // State dữ liệu từ API
     const [hotels, setHotels] = useState([]);
     const [loading, setLoading] = useState(true);
 
-    // Gọi API lấy danh sách khách sạn khi trang load
+    // Gọi API lấy danh sách khách sạn khi trang load hoặc params thay đổi
     useEffect(() => {
         const fetchHotels = async () => {
             setLoading(true);
             try {
-                const res = await axios.get('http://localhost:5000/api/mongo/hotels');
+                // Lấy params đang hiển thị trên URL
+                const currentCheckIn = searchParams.get('checkIn') || checkIn;
+                const currentCheckOut = searchParams.get('checkOut') || checkOut;
+                const currentRoomType = searchParams.get('roomType') || roomType;
+
+                const res = await axios.get(`http://localhost:5000/api/search?checkIn=${currentCheckIn}&checkOut=${currentCheckOut}&roomType=${currentRoomType}`);
                 if (res.data.success) {
                     setHotels(res.data.data);
                 }
@@ -30,7 +48,16 @@ const SearchPage = () => {
             }
         };
         fetchHotels();
-    }, []);
+    }, [searchParams]);
+
+    const handleSearch = () => {
+        const params = new URLSearchParams();
+        if (searchName.trim()) params.append('q', searchName.trim());
+        params.append('checkIn', new Date(checkIn).toISOString());
+        params.append('checkOut', new Date(checkOut).toISOString());
+        params.append('roomType', roomType);
+        setSearchParams(params);
+    };
 
     // Lọc danh sách theo tên (client-side) dựa trên ô search trên thanh header
     const filteredHotels = searchName.trim()
@@ -60,25 +87,41 @@ const SearchPage = () => {
                             </div>
 
                             {/* Ngày checkin/out */}
-                            <div className="search-info-box">
+                            <div className="search-info-box" style={{ gap: '8px' }}>
                                 <CalendarDays size={18} color="#f59e0b" />
-                                <div>
-                                    <div className="info-label">Nhận - Trả phòng</div>
-                                    <div className="info-value">14 thg 5 — 16 thg 5</div>
+                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                    <input 
+                                        type="date" 
+                                        value={checkIn}
+                                        onChange={e => setCheckIn(e.target.value)}
+                                        style={{ background: 'transparent', color: '#fff', border: 'none', outline: 'none', fontSize: '13px' }}
+                                    />
+                                    <span style={{ color: '#64748b' }}>—</span>
+                                    <input 
+                                        type="date" 
+                                        value={checkOut}
+                                        onChange={e => setCheckOut(e.target.value)}
+                                        style={{ background: 'transparent', color: '#fff', border: 'none', outline: 'none', fontSize: '13px' }}
+                                    />
                                 </div>
                             </div>
 
-                            {/* Số người */}
-                            <div className="search-info-box">
+                            {/* Số người / Loại phòng */}
+                            <div className="search-info-box" style={{ gap: '8px' }}>
                                 <Users size={18} color="#f59e0b" />
-                                <div>
-                                    <div className="info-label">Khách và Phòng</div>
-                                    <div className="info-value">2 người lớn, 1 phòng</div>
-                                </div>
+                                <select 
+                                    value={roomType}
+                                    onChange={e => setRoomType(e.target.value)}
+                                    style={{ background: 'transparent', color: '#fff', border: 'none', outline: 'none', fontSize: '14px', cursor: 'pointer' }}
+                                >
+                                    <option value="Standard" style={{ color: '#000' }}>Standard (Tối đa 2 Lớn, 1 Bé)</option>
+                                    <option value="Deluxe" style={{ color: '#000' }}>Deluxe (Tối đa 4 Lớn, 2 Bé)</option>
+                                    <option value="Luxury" style={{ color: '#000' }}>Luxury (Tối đa 6 Lớn, 3 Bé)</option>
+                                </select>
                             </div>
 
                             {/* Nút Tìm */}
-                            <button className="btn-search">
+                            <button className="btn-search" onClick={handleSearch}>
                                 <Search size={18} />
                                 Tìm
                             </button>

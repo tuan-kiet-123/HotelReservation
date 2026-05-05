@@ -605,7 +605,8 @@ DELIMITER $$
 CREATE PROCEDURE `sp_SearchAvailableRooms`(
 		IN p_CheckIn DATETIME,
 		IN p_CheckOut DATETIME,
-		IN p_MaxPrice DECIMAL(15,2)
+		IN p_MaxPrice DECIMAL(15,2),
+		IN p_RoomType VARCHAR(100)
 )
 BEGIN
 		SELECT 
@@ -615,7 +616,8 @@ BEGIN
 			r.CurrentPrice
 		FROM Room r
 		WHERE r.Status = 1
-			AND r.CurrentPrice <= p_MaxPrice
+			AND (p_MaxPrice IS NULL OR r.CurrentPrice <= p_MaxPrice)
+			AND (p_RoomType IS NULL OR p_RoomType = '' OR r.RoomType = p_RoomType)
 			AND fn_CheckRoomAvailability(r.RoomId, p_CheckIn, p_CheckOut) = TRUE;
 END$$
 

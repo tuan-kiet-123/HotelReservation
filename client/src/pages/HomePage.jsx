@@ -29,6 +29,13 @@ const getDayName = (date) => {
 
 const isSameDay = (a, b) => a && b && a.getDate() === b.getDate() && a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear()
 
+const ROOM_CAPACITY = {
+    'Standard': { adults: 2, children: 1 },
+    'Deluxe': { adults: 4, children: 2 },
+    'Luxury': { adults: 6, children: 3 }
+};
+const ROOM_TYPES = ['Standard', 'Deluxe', 'Luxury'];
+
 const HomePage = () => {
     const navigate = useNavigate();
     const [searchQuery, setSearchQuery] = useState('')
@@ -49,7 +56,7 @@ const HomePage = () => {
 
     // Guest picker state
     const [showGuestPicker, setShowGuestPicker] = useState(false)
-    const [rooms, setRooms] = useState(1)
+    const [roomType, setRoomType] = useState('Standard')
     const [adults, setAdults] = useState(2)
     const [children, setChildren] = useState(0)
     const guestRef = useRef(null)
@@ -214,6 +221,9 @@ const HomePage = () => {
                                     onClick={() => {
                                         const params = new URLSearchParams();
                                         if (searchQuery.trim()) params.append('q', searchQuery.trim());
+                                        if (checkIn) params.append('checkIn', checkIn.toISOString());
+                                        if (checkOut) params.append('checkOut', checkOut.toISOString());
+                                        params.append('roomType', roomType);
                                         navigate(`/hotels?${params.toString()}`);
                                     }}
                                     className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-orange-400 hover:from-amber-600 hover:to-orange-500 text-white font-semibold px-8 py-4 m-1.5 rounded-full transition-all duration-300 cursor-pointer shrink-0"
@@ -307,7 +317,7 @@ const HomePage = () => {
                                     <Users className="w-5 h-5 text-amber-500 shrink-0" />
                                     <div className="flex-1">
                                         <p className="text-sm font-semibold text-slate-800">{adults} người lớn</p>
-                                        <p className="text-xs text-slate-400">{rooms} phòng{children > 0 ? ` · ${children} trẻ em` : ''}</p>
+                                        <p className="text-xs text-slate-400">{roomType}{children > 0 ? ` · ${children} trẻ em` : ''}</p>
                                     </div>
                                     <ChevronLeft className="w-4 h-4 text-slate-400 rotate-[-90deg]" />
                                 </button>
@@ -315,10 +325,47 @@ const HomePage = () => {
                                 {/* Guest Dropdown */}
                                 {showGuestPicker && (
                                     <div className="absolute top-full mt-3 right-0 bg-white rounded-2xl shadow-2xl border border-slate-100 p-6 z-50 w-72">
+                                        <div className="flex items-center justify-between py-4 border-b border-slate-100">
+                                            <div>
+                                                <p className="text-sm font-semibold text-slate-700">Loại phòng</p>
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                                <button
+                                                    onClick={() => {
+                                                        const idx = ROOM_TYPES.indexOf(roomType);
+                                                        if (idx > 0) {
+                                                            const newType = ROOM_TYPES[idx - 1];
+                                                            setRoomType(newType);
+                                                            if (adults > ROOM_CAPACITY[newType].adults) setAdults(ROOM_CAPACITY[newType].adults);
+                                                            if (children > ROOM_CAPACITY[newType].children) setChildren(ROOM_CAPACITY[newType].children);
+                                                        }
+                                                    }}
+                                                    className="w-8 h-8 flex items-center justify-center rounded-full border border-slate-300 text-slate-500 hover:border-amber-500 hover:text-amber-500 transition-colors cursor-pointer disabled:opacity-30"
+                                                    disabled={ROOM_TYPES.indexOf(roomType) === 0}
+                                                >
+                                                    <ChevronLeft className="w-4 h-4" />
+                                                </button>
+                                                <span className="w-[60px] text-center text-sm font-semibold text-amber-600">{roomType}</span>
+                                                <button
+                                                    onClick={() => {
+                                                        const idx = ROOM_TYPES.indexOf(roomType);
+                                                        if (idx < ROOM_TYPES.length - 1) {
+                                                            const newType = ROOM_TYPES[idx + 1];
+                                                            setRoomType(newType);
+                                                            if (adults > ROOM_CAPACITY[newType].adults) setAdults(ROOM_CAPACITY[newType].adults);
+                                                            if (children > ROOM_CAPACITY[newType].children) setChildren(ROOM_CAPACITY[newType].children);
+                                                        }
+                                                    }}
+                                                    className="w-8 h-8 flex items-center justify-center rounded-full border border-slate-300 text-slate-500 hover:border-amber-500 hover:text-amber-500 transition-colors cursor-pointer disabled:opacity-30"
+                                                    disabled={ROOM_TYPES.indexOf(roomType) === ROOM_TYPES.length - 1}
+                                                >
+                                                    <ChevronRight className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        </div>
                                         {[
-                                            { label: 'Phòng', value: rooms, set: setRooms, min: 1, max: 10 },
-                                            { label: 'Người lớn', sub: '18 tuổi trở lên', value: adults, set: setAdults, min: 1, max: 20 },
-                                            { label: 'Trẻ em', sub: '0–17 tuổi', value: children, set: setChildren, min: 0, max: 10 },
+                                            { label: 'Người lớn', sub: '18 tuổi trở lên', value: adults, set: setAdults, min: 1, max: ROOM_CAPACITY[roomType].adults },
+                                            { label: 'Trẻ em', sub: '0–17 tuổi', value: children, set: setChildren, min: 0, max: ROOM_CAPACITY[roomType].children },
                                         ].map((item) => (
                                             <div key={item.label} className="flex items-center justify-between py-4 border-b border-slate-100 last:border-0">
                                                 <div>
