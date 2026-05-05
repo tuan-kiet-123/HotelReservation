@@ -67,7 +67,7 @@ export default function MyBookingsPage() {
     const [workingReservation, setWorkingReservation] = useState("");
     const [cancelTarget, setCancelTarget] = useState(null);
     const [reviewTarget, setReviewTarget] = useState(null);
-    const [hotelMap, setHotelMap] = useState({});
+    const [hotelMetaMap, setHotelMetaMap] = useState({});
 
     const summary = useMemo(() => {
         return {
@@ -92,23 +92,27 @@ export default function MyBookingsPage() {
 
         try {
             const data = await fetchReservations({ userId });
-            const mapped = data.map((row) => ({
-                reservationId: row.ReservationId,
-                roomId: row.RoomId,
-                roomLabel: row.RoomType || "",
-                userId: row.UserId,
-                userFullName: currentUser?.FullName || "",
-                hotelSqlId: row.HotelId,
-                hotelName: hotelMap[row.HotelId] || "",
-                checkInDate: row.CheckInDate,
-                checkOutDate: row.CheckOutDate,
-                pricePerNight: Number(row.CurrentPrice || 0),
-                nights: Number(row.Nights || 0),
-                totalAmount: Number(row.TotalAmount || 0),
-                amountPaid: Number(row.AmountPaid || 0),
-                status: row.Status,
-                reviewSubmitted: false
-            }));
+            const mapped = data.map((row) => {
+                const meta = hotelMetaMap[row.HotelId] || {};
+                return {
+                    reservationId: row.ReservationId,
+                    roomId: row.RoomId,
+                    roomLabel: row.RoomType || "",
+                    userId: row.UserId,
+                    userFullName: currentUser?.FullName || "",
+                    hotelId: meta.mongoId || "",
+                    hotelSqlId: row.HotelId,
+                    hotelName: meta.name || "",
+                    checkInDate: row.CheckInDate,
+                    checkOutDate: row.CheckOutDate,
+                    pricePerNight: Number(row.CurrentPrice || 0),
+                    nights: Number(row.Nights || 0),
+                    totalAmount: Number(row.TotalAmount || 0),
+                    amountPaid: Number(row.AmountPaid || 0),
+                    status: row.Status,
+                    reviewSubmitted: false
+                };
+            });
 
             setBookings(mapped);
         } catch (error) {
@@ -126,10 +130,13 @@ export default function MyBookingsPage() {
                 const map = {};
                 hotels.forEach((h) => {
                     if (h?.SqlHotelId) {
-                        map[h.SqlHotelId] = h.Name || "";
+                        map[h.SqlHotelId] = {
+                            name: h.Name || "",
+                            mongoId: h._id || ""
+                        };
                     }
                 });
-                setHotelMap(map);
+                setHotelMetaMap(map);
             } catch (error) {
                 // ignore
             }
@@ -148,7 +155,7 @@ export default function MyBookingsPage() {
         }
 
         loadBookings(currentUser.UserId);
-    }, [currentUser, hotelMap]);
+    }, [currentUser, hotelMetaMap]);
 
     async function handleCheckIn(reservationId) {
         setWorkingReservation(reservationId);

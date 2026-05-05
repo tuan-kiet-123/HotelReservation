@@ -27,8 +27,9 @@ const getAvailableRoomsAggr = async (checkIn, checkOut, maxPrice, roomType) => {
     // 4. TRỘN DỮ LIỆU
     const finalResult = mongoHotels.map(hotel => {
         let hotelData = hotel.toObject(); 
+        const hotelId = String(hotelData._id);
         hotelData.availableRooms = availableRooms.filter(
-            room => room.HotelId === hotelData._id
+            room => String(room.HotelId) === hotelId
         );
         return hotelData;
     });

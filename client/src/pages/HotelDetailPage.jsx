@@ -17,7 +17,7 @@ import {
     Wifi
 } from "lucide-react";
 import SiteShell from "../components/SiteShell";
-import { fetchHotelById, fetchReviewsByHotel } from "../lib/api";
+import { fetchAvailableRooms, fetchHotelById, fetchReviewsByHotel } from "../lib/api";
 import { useAuth } from "../lib/auth";
 
 const demoGallery = [
@@ -46,25 +46,20 @@ function toDateInputValue(date) {
     return new Date(date).toISOString().slice(0, 16);
 }
 
-function buildRoomList(sqlHotelId) {
-    const roomProfiles = [
-        { type: "Deluxe Twin", capacity: 2, area: 32, price: 1300000 },
-        { type: "Grand Premier", capacity: 3, area: 38, price: 1850000 },
-        { type: "Executive Sea View", capacity: 4, area: 45, price: 2400000 },
-        { type: "Royal Suite", capacity: 4, area: 58, price: 3250000 }
-    ];
+function toSearchIsoValue(dateValue) {
+    const date = new Date(dateValue);
+    if (Number.isNaN(date.getTime())) {
+        return null;
+    }
+    return date.toISOString();
+}
 
-    const idsByHotel = {
-        HT91000001: ["RM91000001", "RM91000002", "RM91000003", "RM91000004"],
-        HT92000001: ["RM92000001", "RM92000002", "RM92000003", "RM92000004"]
-    };
-
-    const fallbackIds = idsByHotel.HT91000001;
-    const selectedIds = idsByHotel[sqlHotelId] || fallbackIds;
-
-    return roomProfiles.map((profile, index) => ({
-        ...profile,
-        roomId: selectedIds[index]
+function mapRoomsFromSearch(rooms = []) {
+    return rooms.map((room) => ({
+        roomId: room.RoomId,
+        type: room.RoomType || "Standard",
+        price: Number(room.CurrentPrice || 0),
+        hotelId: room.HotelId
     }));
 }
 
@@ -86,8 +81,8 @@ export default function HotelDetailPage() {
     const [error, setError] = useState("");
     const [hotel, setHotel] = useState(null);
     const [reviews, setReviews] = useState([]);
+    const [availableRooms, setAvailableRooms] = useState([]);
     const [selectedImage, setSelectedImage] = useState(0);
-    const [userId, setUserId] = useState("USR2000001");
     const [checkInDate, setCheckInDate] = useState(() => toDateInputValue(new Date()));
     const [checkOutDate, setCheckOutDate] = useState(() => {
         const next = new Date();
@@ -134,7 +129,46 @@ export default function HotelDetailPage() {
         };
     }, [hotelId]);
 
-    const roomList = useMemo(() => buildRoomList(hotel?.SqlHotelId), [hotel?.SqlHotelId]);
+    useEffect(() => {
+        let active = true;
+
+        async function loadAvailableRooms() {
+            if (!hotelId) {
+                setAvailableRooms([]);
+                return;
+            }
+
+            const checkInIso = toSearchIsoValue(checkInDate);
+            const checkOutIso = toSearchIsoValue(checkOutDate);
+
+            if (!checkInIso || !checkOutIso) {
+                setAvailableRooms([]);
+                return;
+            }
+
+            try {
+                const hotels = await fetchAvailableRooms({
+                    checkIn: checkInIso,
+                    checkOut: checkOutIso
+                });
+                if (!active) return;
+
+                const targetHotel = hotels.find((item) => item?._id === hotelId);
+                const rooms = mapRoomsFromSearch(targetHotel?.availableRooms || []);
+                setAvailableRooms(rooms);
+            } catch (roomError) {
+                if (!active) return;
+                setAvailableRooms([]);
+            }
+        }
+
+        loadAvailableRooms();
+        return () => {
+            active = false;
+        };
+    }, [hotelId, checkInDate, checkOutDate]);
+
+    const roomList = useMemo(() => availableRooms, [availableRooms]);
     const amenities = useMemo(() => parseAmenities(hotel?.Amenities), [hotel?.Amenities]);
     const coverImages = useMemo(() => {
         return [hotel?.Images?.[0], ...demoGallery].filter(Boolean);
@@ -201,10 +235,10 @@ export default function HotelDetailPage() {
                                         <span>{hotel.Location || "TP Hồ Chí Minh"}</span>
                                     </div>
 
-                                    <div className="rounded-2xl bg-amber-50 border border-amber-100 p-4">
+                                    {/* <div className="rounded-2xl bg-amber-50 border border-amber-100 p-4">
                                         <p className="text-sm text-slate-600">Mã khách sạn MySQL</p>
                                         <p className="text-lg font-semibold text-slate-900">{hotel.SqlHotelId || "HT91000001"}</p>
-                                    </div>
+                                    </div> */}
 
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                         <div>
@@ -234,6 +268,10 @@ export default function HotelDetailPage() {
                                                 alert("Vui lòng chọn user demo trước khi đặt phòng.");
                                                 return;
                                             }
+                                            if (roomList.length === 0) {
+                                                alert("Không có phòng trống cho khoảng thời gian này.");
+                                                return;
+                                            }
                                             navigate("/checkout", {
                                                 state: {
                                                     hotel,
@@ -244,6 +282,7 @@ export default function HotelDetailPage() {
                                                 }
                                             });
                                         }}
+                                        disabled={roomList.length === 0}
                                         className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold shadow-md shadow-amber-500/30"
                                     >
                                         Đặt nhanh phòng đầu tiên
@@ -257,6 +296,11 @@ export default function HotelDetailPage() {
                                     <p className="text-sm text-slate-500 mt-1">Chọn phòng để chuyển qua trang thanh toán 1.4.</p>
 
                                     <div className="mt-5 grid sm:grid-cols-2 gap-4">
+                                        {roomList.length === 0 && (
+                                            <div className="rounded-2xl border border-slate-200 p-4 text-sm text-slate-500">
+                                                Không có phòng trống cho khoảng thời gian này.
+                                            </div>
+                                        )}
                                         {roomList.map((room) => (
                                             <article key={room.roomId} className="rounded-2xl border border-slate-200 p-4 hover:shadow-md transition-shadow">
                                                 <div className="flex items-center justify-between gap-3">
@@ -265,8 +309,7 @@ export default function HotelDetailPage() {
                                                 </div>
                                                 <div className="mt-3 space-y-2 text-sm text-slate-500">
                                                     <p className="flex items-center gap-2"><BedDouble className="w-4 h-4 text-slate-400" /> {room.roomId}</p>
-                                                    <p className="flex items-center gap-2"><Users className="w-4 h-4 text-slate-400" /> {room.capacity} khách</p>
-                                                    <p className="flex items-center gap-2"><Bath className="w-4 h-4 text-slate-400" /> {room.area} m²</p>
+                                                    <p className="flex items-center gap-2"><Users className="w-4 h-4 text-slate-400" /> {room.type}</p>
                                                 </div>
                                                 <p className="mt-4 text-lg font-bold text-slate-900">{formatVnd(room.price)}<span className="text-sm text-slate-500 font-normal"> / đêm</span></p>
                                                 <button

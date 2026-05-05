@@ -54,8 +54,8 @@ export default function CheckoutPaymentPage() {
     const selectedHotel = location.state?.hotel || null;
     const selectedRoom = location.state?.room || null;
 
-    const [userId, setUserId] = useState(location.state?.userId || "USR2000001");
-    const [roomId, setRoomId] = useState(selectedRoom?.roomId || "RM91000001");
+    const [userId, setUserId] = useState(location.state?.userId || "");
+    const [roomId, setRoomId] = useState(selectedRoom?.roomId || selectedRoom?.RoomId || "");
     const [checkInDate, setCheckInDate] = useState(
         toDateTimeLocalValue(location.state?.checkInDate || new Date())
     );
@@ -69,7 +69,7 @@ export default function CheckoutPaymentPage() {
     const [cardOwner, setCardOwner] = useState("");
     const [processing, setProcessing] = useState(false);
 
-    const pricePerNight = selectedRoom?.price || 1300000;
+    const pricePerNight = Number(selectedRoom?.price || selectedRoom?.CurrentPrice || 0);
     const nights = useMemo(() => calculateNights(checkInDate, checkOutDate), [checkInDate, checkOutDate]);
     const totalAmount = pricePerNight * nights;
 

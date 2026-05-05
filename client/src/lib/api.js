@@ -22,6 +22,11 @@ export async function fetchReviewsByHotel(hotelId) {
   return response.data?.data || [];
 }
 
+export async function fetchAvailableRooms(params = {}) {
+  const response = await api.get("/search", { params });
+  return response.data?.data || [];
+}
+
 export async function createBooking(payload) {
   const response = await api.post("/mysql/bookings/book-room", payload);
   return response.data;

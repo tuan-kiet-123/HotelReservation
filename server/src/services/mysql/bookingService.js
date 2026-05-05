@@ -28,25 +28,48 @@ function getFirstRow(rows) {
 }
 
 async function bookRoom(input) {
-    const [rows] = await pool.query("CALL sp_BookRoom(?, ?, ?, ?)", [
-        input.roomId,
-        input.userId,
-        input.checkInDate,
-        input.checkOutDate
-    ]);
+    try {
+        console.log("📝 [bookRoom] Input params:", {
+            roomId: input.roomId,
+            userId: input.userId,
+            checkInDate: input.checkInDate,
+            checkOutDate: input.checkOutDate
+        });
 
-    const row = getFirstRow(rows);
-    const parsed = parseHttpMessage(row.Message);
+        const [rows] = await pool.query("CALL sp_BookRoom(?, ?, ?, ?)", [
+            input.roomId,
+            input.userId,
+            input.checkInDate,
+            input.checkOutDate
+        ]);
 
-    return {
-        statusCode: parsed.statusCode,
-        message: parsed.message,
-        data: {
-            reservationId: row.ReservationId || null,
-            paymentType: row.PaymentType || null,
-            amountPaid: Number(row.AmountPaid || 0)
-        }
-    };
+        console.log("📊 [bookRoom] Result rows:", JSON.stringify(rows, null, 2));
+
+        const row = getFirstRow(rows);
+        console.log("✅ [bookRoom] First row:", JSON.stringify(row, null, 2));
+
+        const parsed = parseHttpMessage(row.Message);
+
+        return {
+            statusCode: parsed.statusCode,
+            message: parsed.message,
+            data: {
+                reservationId: row.ReservationId || null,
+                paymentType: row.PaymentType || null,
+                amountPaid: Number(row.AmountPaid || 0)
+            }
+        };
+    } catch (error) {
+        console.error("❌ [bookRoom] ERROR:", {
+            message: error.message,
+            code: error.code,
+            errno: error.errno,
+            sqlState: error.sqlState,
+            sqlMessage: error.sqlMessage,
+            stack: error.stack
+        });
+        throw error;
+    }
 }
 
 async function processCheckInPayment(input) {
