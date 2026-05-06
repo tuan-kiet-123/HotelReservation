@@ -6,6 +6,7 @@ import HotelDetailPage from "./pages/HotelDetailPage";
 import CheckoutPaymentPage from "./pages/CheckoutPaymentPage";
 import MyBookingsPage from "./pages/MyBookingsPage";
 import ReviewOverlayPage from "./pages/ReviewOverlayPage";
+import SearchPage from "./pages/SearchPage";
 
 // Admin Routes
 import AdminLayout from "./layouts/AdminLayout";
@@ -21,6 +22,7 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<HomePage />} />
+          <Route path="/hotels" element={<SearchPage />} />
           <Route path="/hotels/:hotelId" element={<HotelDetailPage />} />
           <Route path="/checkout" element={<CheckoutPaymentPage />} />
           <Route path="/my-bookings" element={<MyBookingsPage />} />

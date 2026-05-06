@@ -22,6 +22,11 @@ export async function fetchReviewsByHotel(hotelId) {
   return response.data?.data || [];
 }
 
+export async function fetchAvailableRooms(params = {}) {
+  const response = await api.get("/search", { params });
+  return response.data?.data || [];
+}
+
 export async function createBooking(payload) {
   const response = await api.post("/mysql/bookings/book-room", payload);
   return response.data;
@@ -37,9 +42,24 @@ export async function processCheckOut(payload) {
   return response.data;
 }
 
+export async function cancelReservation(payload) {
+  const response = await api.post("/mysql/bookings/cancel", payload);
+  return response.data;
+}
+
+export async function fetchReservations(params = {}) {
+  const response = await api.get("/mysql/bookings", { params });
+  return response.data?.data || [];
+}
+
 export async function createReview(payload) {
   const response = await api.post("/mongo/reviews", payload);
   return response.data;
+}
+
+export async function fetchUsers(limit = 3) {
+  const response = await api.get("/mongo/users", { params: { limit } });
+  return response.data?.data || [];
 }
 
 export default api;

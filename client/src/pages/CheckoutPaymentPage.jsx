@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { AlertTriangle, CalendarDays, CreditCard, Landmark, LoaderCircle, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import SiteShell from "../components/SiteShell";
 import { createBooking } from "../lib/api";
 import { upsertBooking } from "../lib/bookingStorage";
+import { useAuth } from "../lib/auth";
 
 function toDateTimeLocalValue(dateValue) {
     if (!dateValue) {
@@ -48,12 +49,13 @@ function formatVnd(value) {
 export default function CheckoutPaymentPage() {
     const navigate = useNavigate();
     const location = useLocation();
+    const { currentUser } = useAuth();
 
     const selectedHotel = location.state?.hotel || null;
     const selectedRoom = location.state?.room || null;
 
-    const [userId, setUserId] = useState(location.state?.userId || "USR2000001");
-    const [roomId, setRoomId] = useState(selectedRoom?.roomId || "RM91000001");
+    const [userId, setUserId] = useState(location.state?.userId || "");
+    const [roomId, setRoomId] = useState(selectedRoom?.roomId || selectedRoom?.RoomId || "");
     const [checkInDate, setCheckInDate] = useState(
         toDateTimeLocalValue(location.state?.checkInDate || new Date())
     );
@@ -67,7 +69,7 @@ export default function CheckoutPaymentPage() {
     const [cardOwner, setCardOwner] = useState("");
     const [processing, setProcessing] = useState(false);
 
-    const pricePerNight = selectedRoom?.price || 1300000;
+    const pricePerNight = Number(selectedRoom?.price || selectedRoom?.CurrentPrice || 0);
     const nights = useMemo(() => calculateNights(checkInDate, checkOutDate), [checkInDate, checkOutDate]);
     const totalAmount = pricePerNight * nights;
 
@@ -80,6 +82,24 @@ export default function CheckoutPaymentPage() {
 
     const payPercent = daysUntilCheckIn > 7 ? 30 : 100;
     const payNow = payPercent === 30 ? totalAmount * 0.3 : totalAmount;
+
+    useEffect(() => {
+        if (!location.state) {
+            toast.warning("Checkout chỉ mở từ trang Chi tiết khách sạn");
+            navigate("/");
+            return;
+        }
+
+        if (!currentUser) {
+            toast.warning("Vui lòng chọn user demo trước khi thanh toán");
+            navigate(-1);
+            return;
+        }
+
+        if (currentUser?.UserId) {
+            setUserId(currentUser.UserId);
+        }
+    }, [location.state, currentUser, navigate]);
 
     async function handleCheckout(event) {
         event.preventDefault();
@@ -116,7 +136,9 @@ export default function CheckoutPaymentPage() {
             upsertBooking({
                 reservationId,
                 roomId,
+                roomLabel: selectedRoom?.type || "",
                 userId,
+                userFullName: currentUser?.FullName || "",
                 hotelId: selectedHotel?._id || "",
                 hotelSqlId: selectedHotel?.SqlHotelId || "",
                 hotelName: selectedHotel?.Name || "DaVinci Resort",
@@ -159,8 +181,8 @@ export default function CheckoutPaymentPage() {
                                     <label className="text-xs font-semibold text-slate-500">RoomId</label>
                                     <input
                                         value={roomId}
-                                        onChange={(event) => setRoomId(event.target.value)}
-                                        className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                        readOnly
+                                        className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm"
                                         required
                                     />
                                 </div>
@@ -168,8 +190,8 @@ export default function CheckoutPaymentPage() {
                                     <label className="text-xs font-semibold text-slate-500">UserId</label>
                                     <input
                                         value={userId}
-                                        onChange={(event) => setUserId(event.target.value)}
-                                        className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                        readOnly
+                                        className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm"
                                         required
                                     />
                                 </div>
@@ -181,8 +203,8 @@ export default function CheckoutPaymentPage() {
                                     <input
                                         type="datetime-local"
                                         value={checkInDate}
-                                        onChange={(event) => setCheckInDate(event.target.value)}
-                                        className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                        readOnly
+                                        className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm"
                                         required
                                     />
                                 </div>
@@ -191,8 +213,8 @@ export default function CheckoutPaymentPage() {
                                     <input
                                         type="datetime-local"
                                         value={checkOutDate}
-                                        onChange={(event) => setCheckOutDate(event.target.value)}
-                                        className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                        readOnly
+                                        className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm"
                                         required
                                     />
                                 </div>

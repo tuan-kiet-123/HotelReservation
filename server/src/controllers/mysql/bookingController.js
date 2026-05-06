@@ -14,6 +14,8 @@ async function bookRoom(req, res, next) {
   try {
     const { roomId, userId, checkInDate, checkOutDate } = req.body;
 
+    console.log("🔍 [bookRoom Controller] Request body:", { roomId, userId, checkInDate, checkOutDate });
+
     if (!roomId || !userId || !checkInDate || !checkOutDate) {
       return fail(
         res,
@@ -30,6 +32,8 @@ async function bookRoom(req, res, next) {
       );
     }
 
+    console.log("✅ [bookRoom Controller] Validation passed. Calling bookingService...");
+
     const result = await bookingService.bookRoom({
       roomId,
       userId,
@@ -37,12 +41,22 @@ async function bookRoom(req, res, next) {
       checkOutDate
     });
 
+    console.log("📦 [bookRoom Controller] Service result:", result);
+
     if (result.statusCode >= 400) {
       return fail(res, result.message, result.statusCode, result.data);
     }
 
     return success(res, result.data, result.message, result.statusCode);
   } catch (error) {
+    console.error("❌ [bookRoom Controller] CAUGHT ERROR:", {
+      message: error.message,
+      code: error.code,
+      errno: error.errno,
+      sqlState: error.sqlState,
+      sqlMessage: error.sqlMessage,
+      stack: error.stack
+    });
     return next(error);
   }
 }
@@ -131,9 +145,47 @@ async function getAdminBookings(req, res, next) {
   }
 }
 
+async function getReservations(req, res, next) {
+  try {
+    const result = await bookingService.getReservations({
+      userId: req.query.userId
+    });
+
+    if (result.statusCode >= 400) {
+      return fail(res, result.message, result.statusCode, result.data);
+    }
+
+    return success(res, result.data, result.message, result.statusCode);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function cancelReservation(req, res, next) {
+  try {
+    const { reservationId } = req.body;
+
+    if (!reservationId) {
+      return fail(res, "reservationId is required", 400);
+    }
+
+    const result = await bookingService.cancelReservation({ reservationId });
+
+    if (result.statusCode >= 400) {
+      return fail(res, result.message, result.statusCode, result.data);
+    }
+
+    return success(res, result.data, result.message, result.statusCode);
+  } catch (error) {
+    return next(error);
+  }
+}
+
 module.exports = {
   bookRoom,
   processCheckInPayment,
   processCheckOut,
-  getAdminBookings
+  getAdminBookings,
+  cancelReservation,
+  getReservations
 };

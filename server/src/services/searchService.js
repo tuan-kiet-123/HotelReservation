@@ -1,11 +1,11 @@
 const { pool: mysqlPool } = require('../config/mysql'); 
 const Hotel = require('../models/mongo/Hotel'); 
 
-const getAvailableRoomsAggr = async (checkIn, checkOut, maxPrice) => {
+const getAvailableRoomsAggr = async (checkIn, checkOut, maxPrice, roomType) => {
     // 1. GỌI MYSQL: Lấy danh sách phòng trống
     const [mysqlResult] = await mysqlPool.query(
-        "CALL sp_SearchAvailableRooms(?, ?, ?)", 
-        [checkIn, checkOut, maxPrice]
+        "CALL sp_SearchAvailableRooms(?, ?, ?, ?)", 
+        [checkIn, checkOut, maxPrice, roomType || null]
     );
     
     const availableRooms = mysqlResult[0]; 
@@ -27,8 +27,9 @@ const getAvailableRoomsAggr = async (checkIn, checkOut, maxPrice) => {
     // 4. TRỘN DỮ LIỆU
     const finalResult = mongoHotels.map(hotel => {
         let hotelData = hotel.toObject(); 
+        const hotelId = String(hotelData._id);
         hotelData.availableRooms = availableRooms.filter(
-            room => room.HotelId === hotelData._id
+            room => String(room.HotelId) === hotelId
         );
         return hotelData;
     });

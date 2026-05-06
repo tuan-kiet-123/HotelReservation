@@ -58,10 +58,22 @@ async function deleteHotel(req, res, next) {
   }
 }
 
+async function getHotelSuggestions(req, res, next) {
+  try {
+    const { q } = req.query;
+    if (!q) return success(res, [], "No query provided");
+    const suggestions = await hotelService.getHotelSuggestions(q);
+    return success(res, suggestions, "Get suggestions successfully");
+  } catch (error) {
+    return next(error);
+  }
+}
+
 module.exports = {
   createHotel,
   getHotels,
   getHotelById,
   updateHotel,
-  deleteHotel
+  deleteHotel,
+  getHotelSuggestions
 };
