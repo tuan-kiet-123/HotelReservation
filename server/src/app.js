@@ -13,6 +13,14 @@ app.use(cors());
 app.use(express.json());
 app.use(morgan("dev"));
 
+// Middleware to disable caching for API endpoints
+app.use((req, res, next) => {
+  res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  next();
+});
+
 app.get("/api/health", async (req, res) => {
   let mysqlStatus = "disconnected";
 

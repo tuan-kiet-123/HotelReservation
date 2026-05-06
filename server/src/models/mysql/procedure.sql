@@ -81,6 +81,7 @@ BEGIN
 	SELECT
 		ranked.HotelId,
 		ranked.RoomId,
+		r.RoomType,
 		ranked.NetRevenue,
 		ranked.RevenueRank
 	FROM (
@@ -89,13 +90,13 @@ BEGIN
 			rr.RoomId,
 			rr.NetRevenue,
 			DENSE_RANK() OVER (
-				PARTITION BY rr.HotelId
 				ORDER BY rr.NetRevenue DESC
 			) AS RevenueRank
 		FROM tmp_room_revenue rr
 	) ranked
+	INNER JOIN Room r ON r.RoomId = ranked.RoomId
 	WHERE ranked.RevenueRank <= 3
-	ORDER BY ranked.HotelId, ranked.RevenueRank, ranked.RoomId;
+	ORDER BY ranked.RevenueRank, ranked.NetRevenue DESC, ranked.RoomId;
 
 	DROP TEMPORARY TABLE IF EXISTS tmp_mapped_ledger;
 	DROP TEMPORARY TABLE IF EXISTS tmp_room_revenue;
@@ -114,7 +115,7 @@ BEGIN
 		DebitAmount DECIMAL(15, 2),
 		CreditAmount DECIMAL(15, 2),
 		Date DATETIME,
-		HotelId VARCHAR(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
+		HotelId VARCHAR(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
 		RoomId VARCHAR(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
 		PRIMARY KEY (LedgerId)
 	);
@@ -157,7 +158,7 @@ BEGIN
 
 	DROP TEMPORARY TABLE IF EXISTS tmp_hotel_totals;
 	CREATE TEMPORARY TABLE tmp_hotel_totals (
-		HotelId VARCHAR(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+		HotelId VARCHAR(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
 		TotalRevenueIn DECIMAL(15, 2),
 		TotalRefundPayout DECIMAL(15, 2),
 		PRIMARY KEY (HotelId)
@@ -217,7 +218,7 @@ BEGIN
 		DebitAmount DECIMAL(15, 2),
 		CreditAmount DECIMAL(15, 2),
 		Date DATETIME,
-		HotelId VARCHAR(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
+		HotelId VARCHAR(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
 		RoomId VARCHAR(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
 		PRIMARY KEY (LedgerId)
 	);
@@ -260,7 +261,7 @@ BEGIN
 
 	DROP TEMPORARY TABLE IF EXISTS tmp_hotel_totals;
 	CREATE TEMPORARY TABLE tmp_hotel_totals (
-		HotelId VARCHAR(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+		HotelId VARCHAR(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
 		TotalRevenueIn DECIMAL(15, 2),
 		PRIMARY KEY (HotelId)
 	);
@@ -279,7 +280,7 @@ BEGIN
 
 	DROP TEMPORARY TABLE IF EXISTS tmp_room_nights;
 	CREATE TEMPORARY TABLE tmp_room_nights (
-		HotelId VARCHAR(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
+		HotelId VARCHAR(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
 		RoomId VARCHAR(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
 		OccupiedRoomNights INT,
 		PRIMARY KEY (HotelId, RoomId)
@@ -305,9 +306,21 @@ BEGIN
 		AND rs.CheckInDate < v_quarter_end
 	GROUP BY rm.HotelId, rs.RoomId;
 
+		DROP TEMPORARY TABLE IF EXISTS tmp_room_nights_by_hotel;
+		CREATE TEMPORARY TABLE tmp_room_nights_by_hotel (
+			HotelId VARCHAR(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+			OccupiedRoomNights INT,
+			PRIMARY KEY (HotelId)
+		);
+
+		INSERT INTO tmp_room_nights_by_hotel
+		SELECT HotelId, SUM(OccupiedRoomNights) AS OccupiedRoomNights
+		FROM tmp_room_nights
+		GROUP BY HotelId;
+
 	DROP TEMPORARY TABLE IF EXISTS tmp_hotel_inventory;
 	CREATE TEMPORARY TABLE tmp_hotel_inventory (
-		HotelId VARCHAR(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+		HotelId VARCHAR(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
 		TotalRooms INT,
 		AvailableRoomNights INT,
 		PRIMARY KEY (HotelId)
@@ -322,47 +335,21 @@ BEGIN
 	WHERE r.Status = 1
 	GROUP BY r.HotelId;
 
-	SELECT
-		COALESCE(ht.HotelId, rn.HotelId, inv.HotelId) AS HotelId,
-		COALESCE(ht.TotalRevenueIn, 0) AS RoomRevenueForKPI,
-		COALESCE(rn.OccupiedRoomNights, 0) AS OccupiedRoomNights,
-		COALESCE(inv.AvailableRoomNights, 0) AS AvailableRoomNights,
-		ROUND(
-			COALESCE(rn.OccupiedRoomNights, 0) * 100 / NULLIF(COALESCE(inv.AvailableRoomNights, 0), 0),
-			2
-		) AS OccupancyRate,
-		COALESCE(ht.TotalRevenueIn, 0) / NULLIF(COALESCE(rn.OccupiedRoomNights, 0), 0) AS ADR,
-		COALESCE(ht.TotalRevenueIn, 0) / NULLIF(COALESCE(inv.AvailableRoomNights, 0), 0) AS RevPAR
-	FROM tmp_hotel_totals ht
-	LEFT JOIN (
-		SELECT HotelId, SUM(OccupiedRoomNights) AS OccupiedRoomNights
-		FROM tmp_room_nights
-		GROUP BY HotelId
-	) rn ON rn.HotelId = ht.HotelId
-	LEFT JOIN tmp_hotel_inventory inv ON inv.HotelId = ht.HotelId
+	DROP TEMPORARY TABLE IF EXISTS tmp_hotel_ids;
+	CREATE TEMPORARY TABLE tmp_hotel_ids (
+		HotelId VARCHAR(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+		PRIMARY KEY (HotelId)
+	);
+
+	INSERT IGNORE INTO tmp_hotel_ids (HotelId)
+	SELECT HotelId FROM tmp_hotel_totals
 	UNION
-	SELECT
-		COALESCE(ht.HotelId, rn.HotelId, inv.HotelId) AS HotelId,
-		COALESCE(ht.TotalRevenueIn, 0) AS RoomRevenueForKPI,
-		COALESCE(rn.OccupiedRoomNights, 0) AS OccupiedRoomNights,
-		COALESCE(inv.AvailableRoomNights, 0) AS AvailableRoomNights,
-		ROUND(
-			COALESCE(rn.OccupiedRoomNights, 0) * 100 / NULLIF(COALESCE(inv.AvailableRoomNights, 0), 0),
-			2
-		) AS OccupancyRate,
-		COALESCE(ht.TotalRevenueIn, 0) / NULLIF(COALESCE(rn.OccupiedRoomNights, 0), 0) AS ADR,
-		COALESCE(ht.TotalRevenueIn, 0) / NULLIF(COALESCE(inv.AvailableRoomNights, 0), 0) AS RevPAR
-	FROM tmp_hotel_totals ht
-	RIGHT JOIN (
-		SELECT HotelId, SUM(OccupiedRoomNights) AS OccupiedRoomNights
-		FROM tmp_room_nights
-		GROUP BY HotelId
-	) rn ON rn.HotelId = ht.HotelId
-	LEFT JOIN tmp_hotel_inventory inv ON inv.HotelId = COALESCE(rn.HotelId, ht.HotelId)
-	WHERE ht.HotelId IS NULL
+	SELECT HotelId FROM tmp_room_nights_by_hotel
 	UNION
+	SELECT HotelId FROM tmp_hotel_inventory;
+
 	SELECT
-		COALESCE(ht.HotelId, rn.HotelId, inv.HotelId) AS HotelId,
+		h.HotelId,
 		COALESCE(ht.TotalRevenueIn, 0) AS RoomRevenueForKPI,
 		COALESCE(rn.OccupiedRoomNights, 0) AS OccupiedRoomNights,
 		COALESCE(inv.AvailableRoomNights, 0) AS AvailableRoomNights,
@@ -372,20 +359,18 @@ BEGIN
 		) AS OccupancyRate,
 		COALESCE(ht.TotalRevenueIn, 0) / NULLIF(COALESCE(rn.OccupiedRoomNights, 0), 0) AS ADR,
 		COALESCE(ht.TotalRevenueIn, 0) / NULLIF(COALESCE(inv.AvailableRoomNights, 0), 0) AS RevPAR
-	FROM tmp_hotel_totals ht
-	LEFT JOIN (
-		SELECT HotelId, SUM(OccupiedRoomNights) AS OccupiedRoomNights
-		FROM tmp_room_nights
-		GROUP BY HotelId
-	) rn ON rn.HotelId = ht.HotelId
-	RIGHT JOIN tmp_hotel_inventory inv ON inv.HotelId = COALESCE(rn.HotelId, ht.HotelId)
-	WHERE rn.HotelId IS NULL AND ht.HotelId IS NULL
-	ORDER BY HotelId;
+	FROM tmp_hotel_ids h
+	LEFT JOIN tmp_hotel_totals ht ON ht.HotelId = h.HotelId
+	LEFT JOIN tmp_room_nights_by_hotel rn ON rn.HotelId = h.HotelId
+	LEFT JOIN tmp_hotel_inventory inv ON inv.HotelId = h.HotelId
+	ORDER BY h.HotelId;
 
 	DROP TEMPORARY TABLE IF EXISTS tmp_mapped_ledger;
 	DROP TEMPORARY TABLE IF EXISTS tmp_hotel_totals;
 	DROP TEMPORARY TABLE IF EXISTS tmp_room_nights;
+	DROP TEMPORARY TABLE IF EXISTS tmp_room_nights_by_hotel;
 	DROP TEMPORARY TABLE IF EXISTS tmp_hotel_inventory;
+	DROP TEMPORARY TABLE IF EXISTS tmp_hotel_ids;
 END$$
 
 DELIMITER ;

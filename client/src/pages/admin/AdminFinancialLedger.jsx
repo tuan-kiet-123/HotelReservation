@@ -1,10 +1,12 @@
-import React, { useState, useMemo } from 'react';
-import { Filter, Download, Search, CheckCircle2, XCircle, ArrowUpRight, ArrowDownLeft, Clock, Calendar } from 'lucide-react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { Filter, Download, Search, CheckCircle2, XCircle, ArrowUpRight, ArrowDownLeft, Clock, Calendar, Loader2 } from 'lucide-react';
 
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 
-// Dummy Data
-const transactionData = [
+import { fetchFinancialLedger } from '../../lib/adminApiService';
+
+// Dummy Data (fallback khi API chưa sẵn sàng)
+const DUMMY_TRANSACTIONS = [
     { id: 'TXN-001', date: '2026-04-27 10:30', type: 'Credit', category: 'Thanh toán toàn bộ', amount: 15000000, status: 'Completed', room: 'Presidential Suite' },
     { id: 'TXN-002', date: '2026-04-27 09:15', type: 'Credit', category: 'Đặt cọc', amount: 3000000, status: 'Completed', room: 'Ocean View Villa' },
     { id: 'TXN-003', date: '2026-04-26 15:45', type: 'Debit', category: 'Hoàn tiền', amount: 5000000, status: 'Processing', room: 'Deluxe Double' },
@@ -12,15 +14,18 @@ const transactionData = [
     { id: 'TXN-005', date: '2026-04-25 08:00', type: 'Debit', category: 'Hoàn tiền', amount: 2000000, status: 'Completed', room: 'Ocean View Villa' },
 ];
 
-const pieData = [
-    { name: 'Thanh toán', value: 65, color: '#10b981' }, // emerald-500
-    { name: 'Đặt cọc', value: 20, color: '#f59e0b' },   // amber-500
-    { name: 'Phí phạt', value: 5, color: '#3b82f6' },   // blue-500
-    { name: 'Hoàn tiền', value: 10, color: '#ef4444' },  // red-500
-];
+const CATEGORY_MAP = {
+    'Deposit': { display: 'Đặt cọc', color: '#f59e0b' },
+    'FinalPayment': { display: 'Thanh toán', color: '#10b981' },
+    'FullPayment': { display: 'Thanh toán', color: '#10b981' },
+    'PenaltyRevenue': { display: 'Phí phạt', color: '#3b82f6' },
+    'RefundPayout': { display: 'Hoàn tiền', color: '#ef4444' },
+};
 
 const formatCurrency = (value) => {
-    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
+    const num = Number(value);
+    if (isNaN(num)) return '0 ₫';
+    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(num);
 };
 
 const StatusBadge = ({ status }) => {
@@ -52,25 +57,102 @@ const AdminFinancialLedger = () => {
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
+    const [transactions, setTransactions] = useState(DUMMY_TRANSACTIONS);
+    const [loading, setLoading] = useState(false);
+    const [page, setPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+
+    const loadLedger = useCallback(async () => {
+        setLoading(true);
+        try {
+            const params = { page, pageSize: 10 };
+            if (startDate) params.startDate = startDate;
+            if (endDate) params.endDate = endDate;
+            if (filterType !== 'All') params.type = filterType;
+
+            const result = await fetchFinancialLedger(params);
+            if (result.totalPages) setTotalPages(result.totalPages);
+            
+            const data = result.data ?? result.transactions ?? result;
+            
+            if (Array.isArray(data) && data.length > 0) {
+                // Ánh xạ dữ liệu từ API (DebitAmount/CreditAmount) sang format của UI (amount/type)
+                const mappedData = data.map(item => {
+                    // Format date
+                    const dateObj = new Date(item.Date);
+                    const formattedDate = !isNaN(dateObj) 
+                        ? new Intl.DateTimeFormat('vi-VN', { 
+                            day: '2-digit', month: '2-digit', year: 'numeric', 
+                            hour: '2-digit', minute: '2-digit' 
+                          }).format(dateObj)
+                        : item.Date;
+
+                    return {
+                        id: item.LedgerId || item.ReferenceId || 'N/A',
+                        date: formattedDate,
+                        rawDate: item.Date,
+                        type: Number(item.CreditAmount) > 0 ? 'Credit' : 'Debit',
+                        category: item.EventType || 'Giao dịch',
+                        amount: Number(item.CreditAmount) > 0 ? item.CreditAmount : item.DebitAmount,
+                        status: 'Completed', // Ledger thường là giao dịch đã hoàn tất
+                        room: item.ReferenceId ? `Mã TC: ${item.ReferenceId}` : ''
+                    };
+                });
+                setTransactions(mappedData);
+            }
+        } catch {
+            // Interceptor already fired toast; keep current data
+        } finally {
+            setLoading(false);
+        }
+    }, [startDate, endDate, filterType, page]);
+
+    useEffect(() => {
+        loadLedger();
+    }, [loadLedger]);
 
     const filteredTransactions = useMemo(() => {
-        return transactionData.filter(t => {
+        return transactions.filter(t => {
             const matchesType = filterType === 'All' || t.type === filterType;
-            const matchesSearch = !searchTerm || 
-                t.id.toLowerCase().includes(searchTerm.toLowerCase()) || 
+            const matchesSearch = !searchTerm ||
+                t.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 t.room.toLowerCase().includes(searchTerm.toLowerCase());
-            
+
             let matchesDate = true;
             if (startDate || endDate) {
-                // Dummy data date is "2026-04-27 10:30" format
-                const txDateStr = t.date.split(' ')[0]; // "2026-04-27"
+                // Sử dụng rawDate (ISO string) để so sánh chuỗi (YYYY-MM-DD) chuẩn xác hơn
+                const txDateStr = t.rawDate ? t.rawDate.split('T')[0] : t.date.split(' ')[0];
                 if (startDate && txDateStr < startDate) matchesDate = false;
                 if (endDate && txDateStr > endDate) matchesDate = false;
             }
 
             return matchesType && matchesSearch && matchesDate;
         });
-    }, [filterType, searchTerm, startDate, endDate]);
+    }, [transactions, filterType, searchTerm, startDate, endDate]);
+
+    const dynamicPieData = useMemo(() => {
+        const categoryTotals = {};
+        transactions.forEach(t => {
+            const categoryInfo = CATEGORY_MAP[t.category];
+            if (categoryInfo) {
+                const key = categoryInfo.display;
+                if (!categoryTotals[key]) {
+                    categoryTotals[key] = { amount: 0, color: categoryInfo.color };
+                }
+                categoryTotals[key].amount += Number(t.amount) || 0;
+            }
+        });
+
+        const total = Object.values(categoryTotals).reduce((sum, cat) => sum + cat.amount, 0);
+        const pieData = Object.entries(categoryTotals).map(([name, data]) => ({
+            name,
+            value: total > 0 ? Math.round((data.amount / total) * 100) : 0,
+            color: data.color,
+            amount: data.amount
+        }));
+        
+        return { pieData, total };
+    }, [transactions]);
 
     return (
         <div className="space-y-6">
@@ -87,7 +169,7 @@ const AdminFinancialLedger = () => {
                         <ResponsiveContainer width="99%" height="100%" debounce={50}>
                             <PieChart>
                                 <Pie
-                                    data={pieData}
+                                    data={dynamicPieData.pieData}
                                     cx="50%"
                                     cy="50%"
                                     innerRadius={70}
@@ -96,29 +178,33 @@ const AdminFinancialLedger = () => {
                                     dataKey="value"
                                     stroke="none"
                                 >
-                                    {pieData.map((entry, index) => (
+                                    {dynamicPieData.pieData.map((entry, index) => (
                                         <Cell key={`cell-${index}`} fill={entry.color} />
                                     ))}
                                 </Pie>
                                 <Tooltip
                                     contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '0.5rem' }}
                                     itemStyle={{ color: '#fff' }}
+                                    formatter={(value, name, props) => {
+                                        const amount = props.payload.amount;
+                                        return [formatCurrency(amount), props.payload.name];
+                                    }}
                                 />
                             </PieChart>
                         </ResponsiveContainer>
                         {/* Center Text */}
                         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                            <span className="text-2xl font-bold text-white">450M</span>
+                            <span className="text-2xl font-bold text-white">{dynamicPieData.total > 0 ? (dynamicPieData.total / 1000000).toFixed(0) + 'M' : '0'}</span>
                             <span className="text-xs text-slate-400">Tổng Giao dịch</span>
                         </div>
                     </div>
 
                     {/* Legend */}
                     <div className="grid grid-cols-2 gap-3 mt-4">
-                        {pieData.map((item) => (
+                        {dynamicPieData.pieData.map((item) => (
                             <div key={item.name} className="flex items-center gap-2">
-                                <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: item.color }}></div>
-                                <span className="text-xs font-medium text-slate-300">{item.name}</span>
+                                <div className="shrink-0" style={{ width: 12, height: 12, borderRadius: '9999px', backgroundColor: item.color }} />
+                                <span className="text-xs font-medium text-slate-300">{item.name} ({item.value}%)</span>
                             </div>
                         ))}
                     </div>
@@ -133,7 +219,7 @@ const AdminFinancialLedger = () => {
                             {['All', 'Credit', 'Debit'].map((type) => (
                                 <button
                                     key={type}
-                                    onClick={() => setFilterType(type)}
+                                    onClick={() => { setFilterType(type); setPage(1); }}
                                     className={`flex-1 xl:flex-none px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${filterType === type
                                         ? 'bg-amber-500 text-white shadow'
                                         : 'text-slate-400 hover:text-white hover:bg-slate-800'
@@ -168,19 +254,19 @@ const AdminFinancialLedger = () => {
                             <input
                                 type="date"
                                 value={startDate}
-                                onChange={(e) => setStartDate(e.target.value)}
+                                onChange={(e) => { setStartDate(e.target.value); setPage(1); }}
                                 className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:border-amber-500 outline-none"
                             />
                             <span className="text-slate-600">to</span>
                             <input
                                 type="date"
                                 value={endDate}
-                                onChange={(e) => setEndDate(e.target.value)}
+                                onChange={(e) => { setEndDate(e.target.value); setPage(1); }}
                                 className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:border-amber-500 outline-none"
                             />
                         </div>
                         <button
-                            onClick={() => { setStartDate(''); setEndDate(''); }}
+                            onClick={() => { setStartDate(''); setEndDate(''); setPage(1); }}
                             className="text-xs text-amber-500 hover:text-amber-400 font-medium"
                         >
                             Xóa lọc ngày
@@ -198,9 +284,17 @@ const AdminFinancialLedger = () => {
                                     <th className="px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Trạng thái</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-slate-700/50">
-                                {filteredTransactions.map((txn) => (
-                                    <tr key={txn.id} className="hover:bg-slate-700/20 transition-colors">
+                            <tbody className="divide-y divide-slate-700/50 relative">
+                                {loading ? (
+                                    <tr>
+                                        <td colSpan="4" className="py-20 text-center">
+                                            <Loader2 className="w-8 h-8 text-amber-500 animate-spin mx-auto" />
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    filteredTransactions.map((txn) => (
+                                        <tr key={txn.id} className="hover:bg-slate-700/20 transition-colors">
+
                                         <td className="px-4 py-4">
                                             <div className="text-sm font-semibold text-white">{txn.id}</div>
                                             <div className="text-xs text-slate-400 mt-0.5">{txn.date}</div>
@@ -217,7 +311,8 @@ const AdminFinancialLedger = () => {
                                             <StatusBadge status={txn.status} />
                                         </td>
                                     </tr>
-                                ))}
+                                    ))
+                                )}
                             </tbody>
                         </table>
                         {filteredTransactions.length === 0 && (
@@ -226,6 +321,29 @@ const AdminFinancialLedger = () => {
                             </div>
                         )}
                     </div>
+
+                    {/* Pagination */}
+                    {totalPages > 1 && (
+                        <div className="flex items-center justify-between mt-6 px-2">
+                            <span className="text-sm text-slate-400">Trang {page} / {totalPages}</span>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                                    disabled={page === 1}
+                                    className="px-3 py-1.5 text-sm font-medium text-slate-300 bg-slate-800 border border-slate-700 rounded-lg hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                >
+                                    Trang trước
+                                </button>
+                                <button
+                                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                                    disabled={page === totalPages}
+                                    className="px-3 py-1.5 text-sm font-medium text-slate-300 bg-slate-800 border border-slate-700 rounded-lg hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                >
+                                    Trang sau
+                                </button>
+                            </div>
+                        </div>
+                    )}
 
                 </div>
             </div>

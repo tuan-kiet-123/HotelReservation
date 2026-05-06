@@ -89,8 +89,51 @@ async function processCheckOut(req, res, next) {
   }
 }
 
+async function getAdminBookings(req, res, next) {
+  try {
+    const { startDate, endDate, hotelId, status, paid, page = 1, pageSize = 20, search } = req.query;
+
+    if (startDate && endDate && startDate > endDate) {
+      return fail(res, "Query param 'startDate' must be earlier than or equal to 'endDate'", 400);
+    }
+
+    const pageNum = Number.parseInt(page, 10);
+    const pageSizeNum = Number.parseInt(pageSize, 10);
+
+    if (!Number.isInteger(pageNum) || pageNum < 1) {
+      return fail(res, "Query param 'page' must be a positive integer", 400);
+    }
+
+    if (!Number.isInteger(pageSizeNum) || pageSizeNum < 1) {
+      return fail(res, "Query param 'pageSize' must be a positive integer", 400);
+    }
+
+    if (pageSizeNum > 100) {
+      return fail(res, "Query param 'pageSize' cannot exceed 100", 400);
+    }
+
+    const params = {
+      startDate: startDate || null,
+      endDate: endDate || null,
+      hotelId: hotelId || null,
+      status: status || null,
+      paid: typeof paid !== 'undefined' ? (paid === 'true' || paid === '1') : null,
+      page: pageNum,
+      pageSize: pageSizeNum,
+      search: search || null
+    };
+
+    const result = await bookingService.getAdminBookings(params);
+
+    return success(res, result, 'OK', 200);
+  } catch (error) {
+    return next(error);
+  }
+}
+
 module.exports = {
   bookRoom,
   processCheckInPayment,
-  processCheckOut
+  processCheckOut,
+  getAdminBookings
 };

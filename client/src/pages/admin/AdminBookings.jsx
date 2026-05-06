@@ -1,30 +1,24 @@
-import React, { useState } from 'react';
-import { Calendar as CalendarIcon, Filter, Search, ChevronLeft, ChevronRight, UserCheck, AlertTriangle, Clock, XCircle, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Calendar as CalendarIcon, Search, ChevronLeft, ChevronRight, UserCheck, AlertTriangle, Clock, XCircle, CheckCircle2, Loader2 } from 'lucide-react';
+import { fetchAdminBookings, fetchHotels } from '../../lib/adminApiService';
 
-// Dummy Bookings Data
-const bookingsData = [
-    { id: 'BK-1001', guest: 'Nguyễn Văn A', room: 'Presidential Suite', checkIn: '2026-04-26', checkOut: '2026-04-29', status: 'CheckedIn', paid: true, autoCancel: false },
-    { id: 'BK-1002', guest: 'Trần Thị B', room: 'Ocean View Villa', checkIn: '2026-04-27', checkOut: '2026-04-30', status: 'PendingCheckIn', paid: false, autoCancel: true },
-    { id: 'BK-1003', guest: 'Lê Văn C', room: 'Deluxe Double', checkIn: '2026-04-27', checkOut: '2026-04-28', status: 'PendingCheckIn', paid: true, autoCancel: false },
-    { id: 'BK-1004', guest: 'Phạm Thị D', room: 'Standard Room', checkIn: '2026-04-25', checkOut: '2026-04-27', status: 'CheckedOut', paid: true, autoCancel: false },
-    { id: 'BK-1005', guest: 'Hoàng Văn E', room: 'Ocean View Villa', checkIn: '2026-04-27', checkOut: '2026-05-02', status: 'Cancelled', paid: false, autoCancel: false },
+// Fallback Dummy Data
+const DUMMY_BOOKINGS = [
+    { id: 'BK-1001', guest: 'Nguyễn Văn A', hotelId: 'HOTEL001', room: 'Presidential Suite', checkIn: '2026-04-26', checkOut: '2026-04-29', status: 'CheckedIn', paid: true },
+    { id: 'BK-1002', guest: 'Trần Thị B', hotelId: 'HOTEL002', room: 'Ocean View Villa', checkIn: '2026-04-27', checkOut: '2026-04-30', status: 'Confirmed', paid: false },
+    { id: 'BK-1003', guest: 'Lê Văn C', hotelId: 'HOTEL001', room: 'Deluxe Double', checkIn: '2026-04-27', checkOut: '2026-04-28', status: 'Confirmed', paid: true },
+    { id: 'BK-1004', guest: 'Phạm Thị D', hotelId: 'HOTEL003', room: 'Standard Room', checkIn: '2026-04-25', checkOut: '2026-04-27', status: 'Completed', paid: true },
+    { id: 'BK-1005', guest: 'Hoàng Văn E', hotelId: 'HOTEL002', room: 'Ocean View Villa', checkIn: '2026-04-27', checkOut: '2026-05-02', status: 'Cancelled', paid: false },
 ];
 
-const StatusIndicator = ({ status, autoCancel }) => {
-    if (autoCancel && status === 'PendingCheckIn') {
-        return (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-red-500/10 text-red-500 border border-red-500/20">
-                <AlertTriangle className="w-3.5 h-3.5" /> Sắp hủy (23:59 nay)
-            </div>
-        );
-    }
+const StatusIndicator = ({ status }) => {
     switch (status) {
+        case 'Confirmed':
+            return <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-amber-500/10 text-amber-500 border border-amber-500/20"><Clock className="w-3.5 h-3.5" /> Đã xác nhận</div>;
         case 'CheckedIn':
             return <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"><UserCheck className="w-3.5 h-3.5" /> Đã nhận phòng</div>;
-        case 'PendingCheckIn':
-            return <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-amber-500/10 text-amber-500 border border-amber-500/20"><Clock className="w-3.5 h-3.5" /> Chờ nhận phòng</div>;
-        case 'CheckedOut':
-            return <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-slate-500/10 text-slate-400 border border-slate-500/20"><CheckCircle2 className="w-3.5 h-3.5" /> Đã trả phòng</div>;
+        case 'Completed':
+            return <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"><CheckCircle2 className="w-3.5 h-3.5" /> Hoàn thành</div>;
         case 'Cancelled':
             return <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-slate-800 text-slate-500 border border-slate-700"><XCircle className="w-3.5 h-3.5" /> Đã hủy</div>;
         default:
@@ -33,123 +27,194 @@ const StatusIndicator = ({ status, autoCancel }) => {
 };
 
 const AdminBookings = () => {
-    const [currentDate, setCurrentDate] = useState(new Date('2026-04-27'));
+    const [startDate, setStartDate] = useState('');
+    const [endDate, setEndDate] = useState('');
+    const [filterHotel, setFilterHotel] = useState('All');
     const [filterStatus, setFilterStatus] = useState('All');
     const [filterPayment, setFilterPayment] = useState('All');
     const [searchTerm, setSearchTerm] = useState('');
+    const [bookings, setBookings] = useState(DUMMY_BOOKINGS);
+    const [hotels, setHotels] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [page, setPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const [totalItems, setTotalItems] = useState(0);
 
-    const formatDisplayDate = (date) => {
-        return `${date.getDate()} Tháng ${date.getMonth() + 1}, ${date.getFullYear()}`;
-    };
+    const hotelMap = useMemo(() => {
+        return hotels.reduce((acc, hotel) => {
+            if (hotel?.SqlHotelId) {
+                acc[hotel.SqlHotelId] = hotel?.Name || hotel?.HotelName || hotel?.name || hotel.SqlHotelId;
+            }
+            return acc;
+        }, {});
+    }, [hotels]);
 
-    const filteredBookings = bookingsData.filter((booking) => {
-        if (filterStatus !== 'All' && booking.status !== filterStatus) return false;
-        if (filterPayment === 'Paid' && !booking.paid) return false;
-        if (filterPayment === 'Unpaid' && booking.paid) return false;
-        if (searchTerm && !booking.guest.toLowerCase().includes(searchTerm.toLowerCase()) && !booking.room.toLowerCase().includes(searchTerm.toLowerCase()) && !booking.id.toLowerCase().includes(searchTerm.toLowerCase())) return false;
-        return true;
-    });
+    const loadHotels = useCallback(async () => {
+        try {
+            const data = await fetchHotels();
+            if (Array.isArray(data)) {
+                setHotels(data);
+            }
+        } catch {
+            // Keep fallback booking data if hotel lookup fails.
+        }
+    }, []);
+
+    useEffect(() => {
+        loadHotels();
+    }, [loadHotels]);
+
+    const loadBookings = useCallback(async () => {
+        setLoading(true);
+        try {
+            const params = { page, pageSize: 10 };
+            if (startDate) params.startDate = startDate;
+            if (endDate) params.endDate = endDate;
+            if (filterHotel !== 'All') params.hotelId = filterHotel;
+            if (filterStatus !== 'All') params.status = filterStatus;
+            if (filterPayment !== 'All') params.paid = filterPayment === 'Paid';
+            if (searchTerm.trim()) params.search = searchTerm.trim();
+
+            const result = await fetchAdminBookings(params);
+            const data = Array.isArray(result.data) ? result.data : [];
+
+            setBookings(data);
+            setTotalPages(Math.max(1, Number(result.totalPages) || 1));
+            setTotalItems(Number(result.total) || data.length);
+        } catch {
+            // Interceptor already fired toast
+        } finally {
+            setLoading(false);
+        }
+    }, [page, startDate, endDate, filterHotel, filterStatus, filterPayment, searchTerm]);
+
+    useEffect(() => { loadBookings(); }, [loadBookings]);
 
     return (
         <div className="space-y-6 h-full flex flex-col">
-            <div className="flex justify-end">
-                <div className="flex items-center gap-3 bg-slate-900 border border-slate-700 rounded-lg p-1 w-full sm:w-auto">
-                    <button
-                        onClick={() => { const d = new Date(currentDate); d.setDate(d.getDate() - 1); setCurrentDate(d); }}
-                        className="p-1.5 hover:bg-slate-800 rounded-md text-slate-400 hover:text-white transition-colors"
-                    >
-                        <ChevronLeft className="w-4 h-4" />
-                    </button>
-                    <div className="flex items-center gap-2 px-2">
-                        <CalendarIcon className="w-4 h-4 text-amber-500" />
-                        <input
-                            type="date"
-                            value={`${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`}
-                            onChange={(e) => {
-                                if (e.target.value) {
-                                    setCurrentDate(new Date(e.target.value));
-                                }
-                            }}
-                            className="bg-transparent text-sm font-medium text-slate-200 outline-none cursor-pointer [&::-webkit-calendar-picker-indicator]:invert-[0.8] hover:text-amber-500 transition-colors"
-                        />
-                    </div>
-                    <button
-                        onClick={() => { const d = new Date(currentDate); d.setDate(d.getDate() + 1); setCurrentDate(d); }}
-                        className="p-1.5 hover:bg-slate-800 rounded-md text-slate-400 hover:text-white transition-colors"
-                    >
-                        <ChevronRight className="w-4 h-4" />
-                    </button>
-                </div>
-            </div>
-
             <div className="flex-1 bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-2xl flex flex-col overflow-hidden">
 
                 {/* Toolbar */}
-                <div className="p-4 border-b border-slate-700 flex flex-col sm:flex-row items-center justify-between gap-4">
-                    <div className="flex items-center gap-2">
+                <div className="p-4 border-b border-slate-700 space-y-4">
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <span className="flex items-center gap-1.5 text-xs font-medium text-slate-400 px-3 py-1.5 bg-slate-900 rounded-full border border-slate-800">
+                            <span className="w-2 h-2 rounded-full bg-amber-500"></span> Đã xác nhận
+                        </span>
                         <span className="flex items-center gap-1.5 text-xs font-medium text-slate-400 px-3 py-1.5 bg-slate-900 rounded-full border border-slate-800">
                             <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Đã nhận phòng
                         </span>
                         <span className="flex items-center gap-1.5 text-xs font-medium text-slate-400 px-3 py-1.5 bg-slate-900 rounded-full border border-slate-800">
-                            <span className="w-2 h-2 rounded-full bg-amber-500"></span> Chờ nhận phòng
-                        </span>
-                        <span className="flex items-center gap-1.5 text-xs font-medium text-slate-400 px-3 py-1.5 bg-slate-900 rounded-full border border-slate-800">
-                            <span className="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]"></span> Sắp hủy tự động
+                            <span className="w-2 h-2 rounded-full bg-cyan-400"></span> Hoàn thành
                         </span>
                     </div>
 
-                    <div className="flex flex-col xl:flex-row items-center gap-3 w-full sm:w-auto">
-                        <select 
+                    <div className="flex flex-col xl:flex-row items-center gap-3 w-full">
+                        <select
+                            value={filterHotel}
+                            onChange={(e) => { setFilterHotel(e.target.value); setPage(1); }}
+                            className="appearance-none bg-slate-900 border border-slate-700 text-slate-200 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-amber-500 transition-colors w-full xl:w-64"
+                        >
+                            <option value="All">Khách sạn: Tất cả</option>
+                            {hotels.map((hotel, index) => {
+                                const hotelKey = hotel?.SqlHotelId || hotel?.id || hotel?._id || `hotel-${index}`;
+                                const hotelLabel = hotel?.Name || hotel?.HotelName || hotel?.name || hotelKey;
+
+                                return (
+                                <option key={hotelKey} value={hotel?.SqlHotelId || hotelKey}>
+                                    {hotelLabel}
+                                </option>
+                                );
+                            })}
+                        </select>
+
+                        <select
                             value={filterStatus}
-                            onChange={(e) => setFilterStatus(e.target.value)}
-                            className="appearance-none bg-slate-900 border border-slate-700 text-slate-200 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-amber-500 transition-colors w-full xl:w-auto"
+                            onChange={(e) => { setFilterStatus(e.target.value); setPage(1); }}
+                            className="appearance-none bg-slate-900 border border-slate-700 text-slate-200 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-amber-500 transition-colors w-full xl:w-56"
                         >
                             <option value="All">Trạng thái: Tất cả</option>
+                            <option value="Confirmed">Đã xác nhận</option>
                             <option value="CheckedIn">Đã nhận phòng</option>
-                            <option value="PendingCheckIn">Chờ nhận phòng</option>
-                            <option value="CheckedOut">Đã trả phòng</option>
+                            <option value="Completed">Hoàn thành</option>
                             <option value="Cancelled">Đã hủy</option>
                         </select>
 
-                        <select 
+                        <select
                             value={filterPayment}
-                            onChange={(e) => setFilterPayment(e.target.value)}
-                            className="appearance-none bg-slate-900 border border-slate-700 text-slate-200 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-amber-500 transition-colors w-full xl:w-auto"
+                            onChange={(e) => { setFilterPayment(e.target.value); setPage(1); }}
+                            className="appearance-none bg-slate-900 border border-slate-700 text-slate-200 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-amber-500 transition-colors w-full xl:w-56"
                         >
                             <option value="All">Thanh toán: Tất cả</option>
                             <option value="Paid">Đã thanh toán</option>
                             <option value="Unpaid">Chưa thanh toán</option>
                         </select>
 
-                        <div className="relative flex-1 w-full xl:w-64">
+                        <div className="relative flex-1 w-full xl:w-72">
                             <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
                             <input
                                 type="text"
                                 value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                placeholder="Tên khách, Mã phòng..."
+                                onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
+                                placeholder="Mã đặt phòng, mã user, phòng..."
                                 className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-9 pr-4 py-2 text-sm text-slate-200 focus:border-amber-500 outline-none transition-colors"
                             />
                         </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-4 p-4 bg-slate-900/50 rounded-xl border border-slate-700/50">
+                        <div className="flex items-center gap-2 text-slate-400">
+                            <CalendarIcon className="w-4 h-4" />
+                            <span className="text-sm font-medium">Khoảng ngày check-in:</span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <input
+                                type="date"
+                                value={startDate}
+                                onChange={(e) => { setStartDate(e.target.value); setPage(1); }}
+                                className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:border-amber-500 outline-none"
+                            />
+                            <span className="text-slate-600">đến</span>
+                            <input
+                                type="date"
+                                value={endDate}
+                                onChange={(e) => { setEndDate(e.target.value); setPage(1); }}
+                                className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:border-amber-500 outline-none"
+                            />
+                        </div>
+                        <button
+                            onClick={() => {
+                                setStartDate('');
+                                setEndDate('');
+                                setPage(1);
+                            }}
+                            className="text-xs text-amber-500 hover:text-amber-400 font-medium"
+                        >
+                            Xóa lọc ngày
+                        </button>
                     </div>
                 </div>
 
                 {/* Bookings Grid/List View */}
                 <div className="flex-1 overflow-auto p-4 custom-scrollbar">
+                    {loading ? (
+                        <div className="h-full flex items-center justify-center">
+                            <Loader2 className="w-8 h-8 text-amber-500 animate-spin" />
+                        </div>
+                    ) : (
+                    <>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                        {filteredBookings.map((booking) => (
+                        {bookings.map((booking) => (
                             <div
                                 key={booking.id}
-
                                 className={`bg-slate-900 border rounded-xl p-5 flex flex-col gap-4 relative overflow-hidden group hover:-translate-y-1 transition-all duration-300 ${booking.autoCancel && booking.status === 'PendingCheckIn'
                                     ? 'border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.1)]'
                                     : 'border-slate-700 hover:border-slate-600 shadow-lg'
                                     }`}
                             >
                                 {/* Left accent border */}
-                                <div className={`absolute left-0 top-0 bottom-0 w-1 ${booking.status === 'CheckedIn' ? 'bg-emerald-500' :
-                                    booking.status === 'PendingCheckIn' && booking.autoCancel ? 'bg-red-500' :
-                                        booking.status === 'PendingCheckIn' ? 'bg-amber-500' :
+                                <div className={`absolute left-0 top-0 bottom-0 w-1 ${booking.status === 'Confirmed' ? 'bg-amber-500' :
+                                    booking.status === 'CheckedIn' ? 'bg-emerald-500' :
+                                        booking.status === 'Completed' ? 'bg-cyan-400' :
                                             'bg-slate-600'
                                     }`}></div>
 
@@ -158,6 +223,7 @@ const AdminBookings = () => {
                                         <p className="text-xs font-semibold text-slate-500 mb-1">{booking.id}</p>
                                         <h3 className="text-base font-bold text-white line-clamp-1">{booking.guest}</h3>
                                         <p className="text-sm font-medium text-amber-500 mt-0.5">{booking.room}</p>
+                                        <p className="text-xs text-slate-500 mt-1">{hotelMap[booking.hotelId] || booking.hotelId || 'Khách sạn'}</p>
                                     </div>
                                     <div className="flex items-center gap-1 bg-slate-800 px-2 py-1 rounded text-xs font-medium text-slate-300">
                                         {booking.paid ? <span className="text-emerald-400">Đã thanh toán</span> : <span className="text-amber-400">Chưa TT</span>}
@@ -177,7 +243,7 @@ const AdminBookings = () => {
                                 </div>
 
                                 <div className="mt-auto pt-2 flex items-center justify-between">
-                                    <StatusIndicator status={booking.status} autoCancel={booking.autoCancel} />
+                                    <StatusIndicator status={booking.status} />
 
                                     <button className="text-xs font-semibold text-amber-500 hover:text-amber-400 hover:underline">
                                         Chi tiết
@@ -186,6 +252,36 @@ const AdminBookings = () => {
                             </div>
                         ))}
                     </div>
+                    {bookings.length === 0 && (
+                        <div className="py-16 text-center text-slate-400 text-sm">
+                            Không tìm thấy đặt phòng phù hợp.
+                        </div>
+                    )}
+                    <div className="flex items-center justify-between mt-6 px-2">
+                        <span className="text-sm text-slate-400">
+                            Trang {page} / {totalPages} · {totalItems} đặt phòng
+                        </span>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setPage((current) => Math.max(1, current - 1))}
+                                disabled={page === 1}
+                                className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-300 bg-slate-800 border border-slate-700 rounded-lg hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                                <ChevronLeft className="w-4 h-4" />
+                                Trang trước
+                            </button>
+                            <button
+                                onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                                disabled={page === totalPages}
+                                className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-300 bg-slate-800 border border-slate-700 rounded-lg hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                                Trang sau
+                                <ChevronRight className="w-4 h-4" />
+                            </button>
+                        </div>
+                    </div>
+                    </>
+                    )}
                 </div>
 
             </div>
