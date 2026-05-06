@@ -19,7 +19,7 @@ import {
     BarChart,
     Bar,
 } from 'recharts';
-import { fetchAdrRevpar, fetchTop3Rooms, fetchAllReviews, fetchHotels, fetchMonthlyRevenue } from '../../lib/adminApiService';
+import { fetchAdrRevpar, fetchTop3Rooms, fetchHotels, fetchMonthlyRevenue } from '../../lib/adminApiService';
 
 const alerts = [
     { id: 1, message: 'Giá Presidential Suite tăng vọt 60%', time: '10 phút trước', type: 'warning' },
@@ -102,12 +102,10 @@ const AdminDashboard = () => {
     const [topRooms, setTopRooms] = useState([]);
     const [hotelMap, setHotelMap] = useState({});
     const [monthlyRevenue, setMonthlyRevenue] = useState([]);
-    const [avgRating, setAvgRating] = useState(null);
     const [trends, setTrends] = useState({
         adr: { trend: 'up', value: '—' },
         revpar: { trend: 'up', value: '—' },
         occupancy: { trend: 'up', value: '—' },
-        rating: { trend: 'up', value: '—' },
         revenue: { trend: 'up', value: '—' },
     });
     const [loading, setLoading] = useState(false);
@@ -148,10 +146,9 @@ const AdminDashboard = () => {
                 return calculateTrend(currentSum, previousSum);
             };
 
-            const [adrRevpar, rooms, reviewsResult, hotelsResult, monthlyResult, previousAdrRevpar, previousMonthlyResult] = await Promise.allSettled([
+            const [adrRevpar, rooms, hotelsResult, monthlyResult, previousAdrRevpar, previousMonthlyResult] = await Promise.allSettled([
                 fetchAdrRevpar(selectedYear, selectedQuarter),
                 fetchTop3Rooms(selectedYear, selectedQuarter),
-                fetchAllReviews(),
                 fetchHotels(),
                 fetchMonthlyRevenue(selectedYear),
                 fetchAdrRevpar(prevYear, prevQuarter),
@@ -212,22 +209,6 @@ const AdminDashboard = () => {
                 }));
             }
 
-            if (reviewsResult.status === 'fulfilled' && Array.isArray(reviewsResult.value)) {
-                const reviews = reviewsResult.value;
-                if (reviews.length > 0) {
-                    const sum = reviews.reduce((acc, curr) => acc + (curr.Rating || 0), 0);
-                    const rating = sum / reviews.length;
-                    setAvgRating(rating);
-                    
-                    // Update rating trend (positive if increasing, comparing with a baseline or using a fixed baseline)
-                    setTrends((prev) => ({
-                        ...prev,
-                        rating: { trend: 'up', value: rating > 4 ? '5.0' : '—' },
-                    }));
-                } else {
-                    setAvgRating(0);
-                }
-            }
         } finally {
             setLoading(false);
         }
@@ -295,11 +276,11 @@ const AdminDashboard = () => {
                     loading={loading}
                 />
                 <KpiCard
-                    title="Đánh giá Trung bình"
-                    value={avgRating !== null ? `${Number(avgRating).toFixed(1)}/5` : '—'}
+                    title="Tỉ lệ lấp đầy"
+                    value={kpiData ? `${(kpiData.OccupancyRate ?? 0).toFixed(2)}%` : '—'}
                     icon={Users}
-                    trend={trends.rating.trend}
-                    trendValue={trends.rating.value}
+                    trend={trends.occupancy.trend}
+                    trendValue={trends.occupancy.value}
                     loading={loading}
                 />
             </div>

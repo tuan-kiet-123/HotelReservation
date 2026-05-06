@@ -21,7 +21,9 @@ createRoot(document.getElementById('root')).render(
         error:   { iconTheme: { primary: '#ef4444', secondary: '#0f172a' } },
       }}
     />
-    <App />
+    <AuthProvider>
+      <App />
+    </AuthProvider>
   </StrictMode>,
 )
 
