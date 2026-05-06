@@ -398,80 +398,118 @@ DELIMITER /
 /
 
 CREATE PROCEDURE sp_BookRoom (
-		IN p_RoomId VARCHAR(255),
-		IN p_UserId VARCHAR(255),
-		IN p_CheckInDate DATETIME,
-		IN p_CheckOutDate DATETIME
+	IN p_RoomId VARCHAR(255),
+    IN p_UserId VARCHAR(255),
+    IN p_CheckInDate DATETIME,
+    IN p_CheckOutDate DATETIME
 )
 BEGIN
-		DECLARE v_RoomStatus BIT;
-		DECLARE v_CurrentPrice DECIMAL(18,2);
-		DECLARE v_OverlapCount INT;
-		DECLARE v_TotalPrice DECIMAL(18,2);
-		DECLARE v_DaysUntilCheckIn INT;
-		DECLARE v_AmountToPay DECIMAL(18,2);
-		DECLARE v_PaymentType VARCHAR(50);
-		DECLARE v_ReservationId VARCHAR(255);
-		DECLARE v_PaymentId VARCHAR(255);
-		DECLARE v_LedgerId VARCHAR(255);
+    DECLARE v_RoomStatus TINYINT;
+    DECLARE v_CurrentPrice DECIMAL(18,2);
+    DECLARE v_OverlapCount INT;
+    DECLARE v_TotalPrice DECIMAL(18,2);
+    DECLARE v_DaysUntilCheckIn INT;
+    DECLARE v_AmountToPay DECIMAL(18,2);
+    DECLARE v_PaymentType VARCHAR(50);
+    DECLARE v_ReservationId VARCHAR(10);
+    DECLARE v_PaymentId VARCHAR(10);
+    DECLARE v_ReservationSeq BIGINT;
+    DECLARE v_PaymentSeq BIGINT;
 
-		DECLARE EXIT HANDLER FOR SQLEXCEPTION
-		BEGIN
-				ROLLBACK;
-				SELECT 'HTTP 500: Lỗi hệ thống. Đã hủy giao dịch.' AS Message;
-		END;
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        SELECT 'HTTP 500: Lỗi hệ thống. Đã hủy giao dịch.' AS Message;
+    END;
 
-		IF DATE(p_CheckInDate) < CURDATE() OR DATE(p_CheckOutDate) <= DATE(p_CheckInDate) THEN
-				SELECT 'HTTP 400: Ngày nhận/trả phòng không hợp lệ.' AS Message;
-		ELSE
-				SET v_ReservationId = UUID();
-				SET v_PaymentId = UUID();
-				SET v_LedgerId = UUID();
+    IF DATE(p_CheckInDate) < CURDATE() OR DATE(p_CheckOutDate) <= DATE(p_CheckInDate) THEN
+        SELECT 'HTTP 400: Ngày nhận/trả phòng không hợp lệ.' AS Message;
+    ELSE
+        START TRANSACTION;
 
-				START TRANSACTION;
+        SELECT LastNumber INTO v_ReservationSeq
+        FROM IdSequence
+        WHERE SequenceName = 'Reservation'
+        FOR UPDATE;
 
-				SELECT Status, CurrentPrice INTO v_RoomStatus, v_CurrentPrice
-				FROM Room WHERE RoomId = p_RoomId FOR UPDATE;
+        IF v_ReservationSeq IS NULL THEN
+            INSERT INTO IdSequence (SequenceName, LastNumber)
+            VALUES ('Reservation', 0)
+            ON DUPLICATE KEY UPDATE LastNumber = LastNumber;
+            SET v_ReservationSeq = 0;
+        END IF;
 
-				IF v_RoomStatus = 0 THEN
-						ROLLBACK;
-						SELECT 'HTTP 403: Phòng đang bảo trì.' AS Message;
-				ELSE
-						SELECT COUNT(*) INTO v_OverlapCount
-						FROM Reservation
-						WHERE RoomId = p_RoomId
-							AND Status IN ('Confirmed', 'CheckedIn')
-							AND (p_CheckInDate < CheckOutDate AND p_CheckOutDate > CheckInDate);
+        SET v_ReservationSeq = v_ReservationSeq + 1;
+        UPDATE IdSequence
+        SET LastNumber = v_ReservationSeq
+        WHERE SequenceName = 'Reservation';
+        SET v_ReservationId = CONCAT('RSV', LPAD(v_ReservationSeq, 7, '0'));
 
-						IF v_OverlapCount > 0 THEN
-								ROLLBACK;
-								SELECT 'HTTP 409: Phòng đã có người đặt trong khoảng thời gian này.' AS Message;
-						ELSE
-								SET v_TotalPrice = v_CurrentPrice * DATEDIFF(p_CheckOutDate, p_CheckInDate);
-								SET v_DaysUntilCheckIn = DATEDIFF(p_CheckInDate, CURDATE());
+        SELECT LastNumber INTO v_PaymentSeq
+        FROM IdSequence
+        WHERE SequenceName = 'Payment'
+        FOR UPDATE;
 
-								IF v_DaysUntilCheckIn >= 7 THEN
-										SET v_AmountToPay = v_TotalPrice * 0.3;
-										SET v_PaymentType = 'Deposit';
-								ELSE
-										SET v_AmountToPay = v_TotalPrice;
-										SET v_PaymentType = 'FullPayment';
-								END IF;
+        IF v_PaymentSeq IS NULL THEN
+            INSERT INTO IdSequence (SequenceName, LastNumber)
+            VALUES ('Payment', 0)
+            ON DUPLICATE KEY UPDATE LastNumber = LastNumber;
+            SET v_PaymentSeq = 0;
+        END IF;
 
-								INSERT INTO Reservation (ReservationId, RoomId, UserId, CheckInDate, CheckOutDate, Status)
-								VALUES (v_ReservationId, p_RoomId, p_UserId, p_CheckInDate, p_CheckOutDate, 'Confirmed');
+        SET v_PaymentSeq = v_PaymentSeq + 1;
+        UPDATE IdSequence
+        SET LastNumber = v_PaymentSeq
+        WHERE SequenceName = 'Payment';
+        SET v_PaymentId = CONCAT('PMT', LPAD(v_PaymentSeq, 7, '0'));
 
-								INSERT INTO Payment (PaymentId, ReservationId, PaymentType, Amount, PaymentDate, Status)
-								VALUES (v_PaymentId, v_ReservationId, v_PaymentType, v_AmountToPay, NOW(), 'Completed');
+        SELECT Status, CurrentPrice INTO v_RoomStatus, v_CurrentPrice
+        FROM Room
+        WHERE RoomId = p_RoomId COLLATE utf8mb4_general_ci
+        FOR UPDATE;
 
-								INSERT INTO FinancialLedger (LedgerId, ReferenceId, DebitAmount, CreditAmount, Date)
-								VALUES (v_LedgerId, v_PaymentId, 0, v_AmountToPay, NOW());
+        IF v_RoomStatus IS NULL THEN
+            ROLLBACK;
+            SELECT 'HTTP 404: Không tìm thấy phòng.' AS Message;
+        ELSEIF v_RoomStatus = 0 THEN
+            ROLLBACK;
+            SELECT 'HTTP 403: Phòng đang bảo trì.' AS Message;
+        ELSE
+            SELECT COUNT(*) INTO v_OverlapCount
+            FROM Reservation
+            WHERE RoomId = p_RoomId COLLATE utf8mb4_general_ci
+              AND Status IN ('Confirmed', 'CheckedIn')
+              AND (p_CheckInDate < CheckOutDate AND p_CheckOutDate > CheckInDate);
 
-								COMMIT;
-								SELECT 'HTTP 200: Đặt phòng thành công!' AS Message, v_ReservationId AS ReservationId, v_PaymentType AS PaymentType, v_AmountToPay AS AmountPaid;
-						END IF;
-				END IF;
-		END IF;
+            IF v_OverlapCount > 0 THEN
+                ROLLBACK;
+                SELECT 'HTTP 409: Phòng đã có người đặt trong khoảng thời gian này.' AS Message;
+            ELSE
+                SET v_TotalPrice = v_CurrentPrice * DATEDIFF(p_CheckOutDate, p_CheckInDate);
+                SET v_DaysUntilCheckIn = DATEDIFF(p_CheckInDate, CURDATE());
+
+                IF v_DaysUntilCheckIn >= 7 THEN
+                    SET v_AmountToPay = v_TotalPrice * 0.3;
+                    SET v_PaymentType = 'Deposit';
+                ELSE
+                    SET v_AmountToPay = v_TotalPrice;
+                    SET v_PaymentType = 'FullPayment';
+                END IF;
+
+                INSERT INTO Reservation (ReservationId, RoomId, UserId, CheckInDate, CheckOutDate, Status)
+                VALUES (v_ReservationId, p_RoomId, p_UserId, p_CheckInDate, p_CheckOutDate, 'Confirmed');
+
+                INSERT INTO Payment (PaymentId, ReservationId, PaymentType, Amount, PaymentDate, Status)
+                VALUES (v_PaymentId, v_ReservationId, v_PaymentType, v_AmountToPay, NOW(), 'Completed');
+
+                COMMIT;
+                SELECT 'HTTP 200: Đặt phòng thành công!' AS Message,
+                       v_ReservationId AS ReservationId,
+                       v_PaymentType AS PaymentType,
+                       v_AmountToPay AS AmountPaid;
+            END IF;
+        END IF;
+    END IF;
 END
 /
 /
@@ -482,65 +520,72 @@ DELIMITER /
 /
 
 CREATE PROCEDURE sp_ProcessCheckIn (
-		IN p_ReservationId VARCHAR(255)
+	IN p_ReservationId VARCHAR(255)
 )
 BEGIN
-		DECLARE v_ResStatus VARCHAR(50);
-		DECLARE v_RoomId VARCHAR(255);
-		DECLARE v_CurrentPrice DECIMAL(18,2);
-		DECLARE v_CheckInDate DATETIME;
-		DECLARE v_CheckOutDate DATETIME;
-		DECLARE v_TotalPrice DECIMAL(18,2);
-		DECLARE v_PaidAmount DECIMAL(18,2);
-		DECLARE v_RemainingAmount DECIMAL(18,2);
-		DECLARE v_PaymentId VARCHAR(255);
-		DECLARE v_LedgerId VARCHAR(255);
+	DECLARE v_ResStatus VARCHAR(50);
+	DECLARE v_RoomId VARCHAR(255);
+	DECLARE v_CurrentPrice DECIMAL(18,2);
+	DECLARE v_CheckInDate DATETIME;
+	DECLARE v_CheckOutDate DATETIME;
+	DECLARE v_TotalPrice DECIMAL(18,2);
+	DECLARE v_PaidAmount DECIMAL(18,2);
+	DECLARE v_RemainingAmount DECIMAL(18,2);
+	DECLARE v_PaymentId VARCHAR(10);
+	DECLARE v_PaymentSeq BIGINT;
 
-		DECLARE EXIT HANDLER FOR SQLEXCEPTION
-		BEGIN
-				ROLLBACK;
-				SELECT 'HTTP 500: Lỗi hệ thống khi thanh toán.' AS Message;
-		END;
+	DECLARE EXIT HANDLER FOR SQLEXCEPTION
+	BEGIN
+		ROLLBACK;
+		SELECT 'HTTP 500: Lỗi hệ thống khi thanh toán.' AS Message;
+	END;
 
-		START TRANSACTION;
+	START TRANSACTION;
 
-		SELECT RoomId, CheckInDate, CheckOutDate, Status
-		INTO v_RoomId, v_CheckInDate, v_CheckOutDate, v_ResStatus
-		FROM Reservation
-		WHERE ReservationId = p_ReservationId FOR UPDATE;
+	SELECT RoomId, CheckInDate, CheckOutDate, Status
+	INTO v_RoomId, v_CheckInDate, v_CheckOutDate, v_ResStatus
+	FROM Reservation
+	WHERE ReservationId = p_ReservationId COLLATE utf8mb4_general_ci FOR UPDATE;
 
-		IF v_ResStatus IS NULL THEN
-				ROLLBACK;
-				SELECT 'HTTP 404: Không tìm thấy đơn.' AS Message;
-		ELSEIF v_ResStatus != 'Confirmed' THEN
-				ROLLBACK;
-				SELECT 'HTTP 400: Trạng thái đơn không hợp lệ.' AS Message;
-		ELSE
-				SELECT CurrentPrice INTO v_CurrentPrice FROM Room WHERE RoomId = v_RoomId;
-				SET v_TotalPrice = v_CurrentPrice * DATEDIFF(v_CheckOutDate, v_CheckInDate);
+	IF v_ResStatus IS NULL THEN
+		ROLLBACK;
+		SELECT 'HTTP 404: Không tìm thấy đơn.' AS Message;
+	ELSEIF v_ResStatus COLLATE utf8mb4_general_ci <> 'Confirmed' THEN
+		ROLLBACK;
+		SELECT 'HTTP 400: Trạng thái đơn không hợp lệ.' AS Message;
+	ELSE
+		SELECT CurrentPrice INTO v_CurrentPrice FROM Room WHERE RoomId = v_RoomId COLLATE utf8mb4_general_ci;
+		SET v_TotalPrice = v_CurrentPrice * DATEDIFF(v_CheckOutDate, v_CheckInDate);
 
-				SELECT IFNULL(SUM(Amount), 0) INTO v_PaidAmount
-				FROM Payment
-				WHERE ReservationId = p_ReservationId AND Status = 'Completed';
+		SELECT IFNULL(SUM(Amount), 0) INTO v_PaidAmount
+		FROM Payment
+		WHERE ReservationId = p_ReservationId COLLATE utf8mb4_general_ci AND Status = 'Completed';
 
-				SET v_RemainingAmount = v_TotalPrice - v_PaidAmount;
+		SET v_RemainingAmount = v_TotalPrice - v_PaidAmount;
 
-				IF v_RemainingAmount > 0 THEN
-						SET v_PaymentId = UUID();
-						SET v_LedgerId = UUID();
+		IF v_RemainingAmount > 0 THEN
+			SELECT LastNumber INTO v_PaymentSeq
+			FROM IdSequence
+			WHERE SequenceName = 'Payment'
+			FOR UPDATE;
 
-						INSERT INTO Payment (PaymentId, ReservationId, PaymentType, Amount, PaymentDate, Status)
-						VALUES (v_PaymentId, p_ReservationId, 'FinalPayment', v_RemainingAmount, NOW(), 'Completed');
+			SET v_PaymentSeq = v_PaymentSeq + 1;
+			UPDATE IdSequence
+			SET LastNumber = v_PaymentSeq
+			WHERE SequenceName = 'Payment';
+			SET v_PaymentId = CONCAT('PMT', LPAD(v_PaymentSeq, 7, '0'));
 
-						INSERT INTO FinancialLedger (LedgerId, ReferenceId, DebitAmount, CreditAmount, Date)
-						VALUES (v_LedgerId, v_PaymentId, 0, v_RemainingAmount, NOW());
-				END IF;
-
-				UPDATE Reservation SET Status = 'CheckedIn' WHERE ReservationId = p_ReservationId;
-
-				COMMIT;
-				SELECT 'HTTP 200: Check-in thành công!' AS Message, v_RemainingAmount AS AmountCollected;
+			INSERT INTO Payment (PaymentId, ReservationId, PaymentType, Amount, PaymentDate, Status)
+			VALUES (v_PaymentId, p_ReservationId, 'FinalPayment', v_RemainingAmount, NOW(), 'Completed');
 		END IF;
+
+		UPDATE Reservation
+		SET Status = 'CheckedIn'
+		WHERE ReservationId = p_ReservationId COLLATE utf8mb4_general_ci;
+
+		COMMIT;
+		SELECT 'HTTP 200: Check-in thành công!' AS Message, v_RemainingAmount AS AmountCollected;
+	END IF;
 END
 /
 /
@@ -622,3 +667,41 @@ BEGIN
 END$$
 
 DELIMITER;
+
+DELIMITER $$
+
+CREATE PROCEDURE "sp_ProcessCheckOut"(
+    IN p_ReservationId VARCHAR(255)
+)
+BEGIN
+    DECLARE v_ResStatus VARCHAR(50);
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        SELECT 'HTTP 500: Lỗi hệ thống khi trả phòng.' AS Message;
+    END;
+
+    START TRANSACTION;
+
+    SELECT Status
+    INTO v_ResStatus
+    FROM Reservation
+    WHERE ReservationId = p_ReservationId COLLATE utf8mb4_general_ci
+    FOR UPDATE;
+
+    IF v_ResStatus IS NULL THEN
+        ROLLBACK;
+        SELECT 'HTTP 404: Không tìm thấy đơn.' AS Message;
+    ELSEIF v_ResStatus COLLATE utf8mb4_general_ci <> 'CheckedIn' THEN
+        ROLLBACK;
+        SELECT 'HTTP 400: Chỉ đơn CheckedIn mới được trả phòng.' AS Message;
+    ELSE
+        UPDATE Reservation
+        SET Status = 'Completed'
+        WHERE ReservationId = p_ReservationId COLLATE utf8mb4_general_ci;
+
+        COMMIT;
+        SELECT 'HTTP 200: Trả phòng thành công!' AS Message;
+    END IF;
+END
