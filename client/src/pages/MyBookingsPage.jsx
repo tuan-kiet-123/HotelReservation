@@ -312,6 +312,7 @@ export default function MyBookingsPage() {
                                         </div>
 
                                         <div className="grid sm:grid-cols-2 gap-x-8 gap-y-2 text-sm text-slate-600">
+                                            <p><span className="font-medium text-slate-700">Mã đơn:</span> {booking.reservationId || "-"}</p>
                                             <p><span className="font-medium text-slate-700">Khách hàng:</span> {booking.userFullName || booking.userId || "-"}</p>
                                             <p><span className="font-medium text-slate-700">Phòng:</span> {booking.roomLabel || booking.roomId}</p>
                                             <p className="flex items-center gap-1"><CalendarDays className="w-4 h-4 text-amber-500" /> {formatDateTime(booking.checkInDate)}</p>
