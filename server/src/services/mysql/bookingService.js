@@ -73,6 +73,26 @@ async function bookRoom(input) {
 }
 
 async function processCheckInPayment(input) {
+    // Validate check-in date first
+    const [resRows] = await pool.query(
+        "SELECT CheckInDate FROM Reservation WHERE ReservationId = ?",
+        [input.reservationId]
+    );
+    
+    if (!resRows || resRows.length === 0) {
+        throw new Error("Reservation not found");
+    }
+    
+    const checkInDate = new Date(resRows[0].CheckInDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    checkInDate.setHours(0, 0, 0, 0);
+    
+    if (checkInDate > today) {
+        const daysUntil = Math.ceil((checkInDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        throw new Error(`Early check-in not allowed. Check-in date is ${daysUntil} day(s) away.`);
+    }
+
     const [rows] = await pool.query("CALL sp_ProcessCheckIn(?)", [
         input.reservationId
     ]);
@@ -218,10 +238,14 @@ async function getReservations(filters = {}) {
             rm.CurrentPrice AS CurrentPrice,
             GREATEST(DATEDIFF(r.CheckOutDate, r.CheckInDate), 1) AS Nights,
             GREATEST(DATEDIFF(r.CheckOutDate, r.CheckInDate), 1) * rm.CurrentPrice AS TotalAmount,
-            COALESCE(SUM(p.Amount), 0) AS AmountPaid
+            COALESCE(SUM(p.Amount), 0) AS AmountPaid,
+            COALESCE(MAX(rf.RefundAmount), 0) AS RefundAmount,
+            COALESCE(MAX(rf.PenaltyAmount), 0) AS PenaltyAmount,
+            MAX(rf.ProcessedAt) AS RefundProcessedAt
         FROM Reservation r
         INNER JOIN Room rm ON rm.RoomId = r.RoomId
         LEFT JOIN Payment p ON p.ReservationId = r.ReservationId AND p.Status = 'Completed'
+        LEFT JOIN Refund rf ON rf.ReservationId = r.ReservationId
         WHERE (? IS NULL OR r.UserId = ?)
         GROUP BY r.ReservationId, r.RoomId, r.UserId, r.CheckInDate, r.CheckOutDate, r.Status, rm.HotelId, rm.RoomType, rm.CurrentPrice
         ORDER BY r.CheckInDate DESC
@@ -239,12 +263,29 @@ async function getReservations(filters = {}) {
 async function cancelReservation(input) {
     await pool.query("CALL sp_CancelReservation(?)", [input.reservationId]);
 
+    const [refundRows] = await pool.query(
+        `
+        SELECT RefundId, RefundAmount, PenaltyAmount, ProcessedAt
+        FROM Refund
+        WHERE ReservationId = ?
+        ORDER BY ProcessedAt DESC
+        LIMIT 1
+        `,
+        [input.reservationId]
+    );
+
+    const refundRow = refundRows && refundRows[0] ? refundRows[0] : null;
+
     return {
         statusCode: 200,
         message: "Reservation cancelled",
         data: {
             reservationId: input.reservationId,
-            status: "Cancelled"
+            status: "Cancelled",
+            refundId: refundRow ? refundRow.RefundId : null,
+            refundAmount: refundRow ? Number(refundRow.RefundAmount || 0) : 0,
+            penaltyAmount: refundRow ? Number(refundRow.PenaltyAmount || 0) : 0,
+            refundProcessedAt: refundRow ? refundRow.ProcessedAt : null
         }
     };
 }

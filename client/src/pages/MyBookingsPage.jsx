@@ -61,6 +61,21 @@ function calculateRefundPreview(booking) {
     };
 }
 
+function canCheckIn(checkInDate) {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const checkIn = new Date(checkInDate);
+    checkIn.setHours(0, 0, 0, 0);
+    return checkIn <= now;
+}
+
+function getCheckInBlockMessage(checkInDate) {
+    const now = new Date();
+    const checkIn = new Date(checkInDate);
+    const daysUntil = Math.ceil((checkIn.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    return `Check-in từ ${formatDateTime(checkInDate)} (còn ${daysUntil} ngày)`;
+}
+
 export default function MyBookingsPage() {
     const { currentUser } = useAuth();
     const [bookings, setBookings] = useState([]);
@@ -109,6 +124,9 @@ export default function MyBookingsPage() {
                     nights: Number(row.Nights || 0),
                     totalAmount: Number(row.TotalAmount || 0),
                     amountPaid: Number(row.AmountPaid || 0),
+                    refundAmount: Number(row.RefundAmount || 0),
+                    penaltyAmount: Number(row.PenaltyAmount || 0),
+                    refundProcessedAt: row.RefundProcessedAt || null,
                     status: row.Status,
                     reviewSubmitted: false
                 };
@@ -216,8 +234,9 @@ export default function MyBookingsPage() {
             updateOneBooking(cancelTarget.reservationId, {
                 status: "Cancelled",
                 cancelledAt: new Date().toISOString(),
-                refundAmount: preview.refund,
-                penaltyAmount: preview.penalty,
+                refundAmount: Number(response?.data?.refundAmount ?? preview.refund),
+                penaltyAmount: Number(response?.data?.penaltyAmount ?? preview.penalty),
+                refundProcessedAt: response?.data?.refundProcessedAt || null,
                 refundRule: preview.label
             });
 
@@ -331,15 +350,23 @@ export default function MyBookingsPage() {
 
                                     <div className="flex flex-wrap gap-2 lg:justify-end">
                                         {booking.status === "Confirmed" && (
-                                            <button
-                                                type="button"
-                                                onClick={() => handleCheckIn(booking.reservationId)}
-                                                disabled={workingReservation === booking.reservationId}
-                                                className="px-4 py-2 rounded-xl bg-amber-500 text-white text-sm font-semibold inline-flex items-center gap-2 disabled:opacity-60"
-                                            >
-                                                {workingReservation === booking.reservationId ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <LogIn className="w-4 h-4" />}
-                                                Check-in
-                                            </button>
+                                            <div className="relative group">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleCheckIn(booking.reservationId)}
+                                                    disabled={workingReservation === booking.reservationId || !canCheckIn(booking.checkInDate)}
+                                                    className="px-4 py-2 rounded-xl bg-amber-500 text-white text-sm font-semibold inline-flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                                                    title={!canCheckIn(booking.checkInDate) ? getCheckInBlockMessage(booking.checkInDate) : ""}
+                                                >
+                                                    {workingReservation === booking.reservationId ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <LogIn className="w-4 h-4" />}
+                                                    Check-in
+                                                </button>
+                                                {!canCheckIn(booking.checkInDate) && (
+                                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-10 whitespace-nowrap bg-slate-900 text-white text-xs px-2 py-1 rounded">
+                                                        {getCheckInBlockMessage(booking.checkInDate)}
+                                                    </div>
+                                                )}
+                                            </div>
                                         )}
 
                                         {booking.status === "CheckedIn" && (

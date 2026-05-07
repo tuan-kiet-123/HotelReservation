@@ -79,6 +79,9 @@ async function processCheckInPayment(req, res, next) {
 
     return success(res, result.data, result.message, result.statusCode);
   } catch (error) {
+    if (error.message && error.message.includes("Early check-in")) {
+      return fail(res, error.message, 400);
+    }
     return next(error);
   }
 }
