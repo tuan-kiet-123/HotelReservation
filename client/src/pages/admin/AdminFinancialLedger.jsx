@@ -28,6 +28,11 @@ const formatCurrency = (value) => {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(num);
 };
 
+const toTimestamp = (value) => {
+    const ts = new Date(value).getTime();
+    return Number.isFinite(ts) ? ts : 0;
+};
+
 const StatusBadge = ({ status }) => {
     switch (status) {
         case 'Completed':
@@ -127,7 +132,7 @@ const AdminFinancialLedger = () => {
             }
 
             return matchesType && matchesSearch && matchesDate;
-        });
+        }).sort((a, b) => toTimestamp(b.rawDate || b.date) - toTimestamp(a.rawDate || a.date));
     }, [transactions, filterType, searchTerm, startDate, endDate]);
 
     const dynamicPieData = useMemo(() => {

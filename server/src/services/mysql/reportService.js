@@ -132,7 +132,7 @@ async function getFinancialLedgers(page = 1, pageSize = 10, filters = {}) {
     SELECT LedgerId, ReferenceId, EventType, DebitAmount, CreditAmount, Date
     FROM FinancialLedger
     ${whereClause}
-    ORDER BY Date DESC
+    ORDER BY Date DESC, LedgerId DESC
     LIMIT ? OFFSET ?
   `;
   const [dataRows] = await pool.query(dataQuery, [...params, ps, offset]);

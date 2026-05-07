@@ -26,6 +26,11 @@ const StatusIndicator = ({ status }) => {
     }
 };
 
+const toTimestamp = (value) => {
+    const ts = new Date(value).getTime();
+    return Number.isFinite(ts) ? ts : 0;
+};
+
 const AdminBookings = () => {
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
@@ -203,7 +208,13 @@ const AdminBookings = () => {
                     ) : (
                     <>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                        {bookings.map((booking) => (
+                        {[...bookings]
+                            .sort((a, b) => {
+                                const dateDiff = toTimestamp(b.createdAt || b.checkIn) - toTimestamp(a.createdAt || a.checkIn);
+                                if (dateDiff !== 0) return dateDiff;
+                                return String(b.id || '').localeCompare(String(a.id || ''));
+                            })
+                            .map((booking) => (
                             <div
                                 key={booking.id}
                                 className={`bg-slate-900 border rounded-xl p-5 flex flex-col gap-4 relative overflow-hidden group hover:-translate-y-1 transition-all duration-300 ${booking.autoCancel && booking.status === 'PendingCheckIn'

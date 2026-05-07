@@ -172,7 +172,7 @@ async function getAdminBookings(params) {
         FROM Reservation r
         LEFT JOIN Room rm ON rm.RoomId = r.RoomId
         ${whereSql}
-        ORDER BY r.CheckInDate DESC, r.ReservationId DESC
+        ORDER BY r.ReservationId DESC
         LIMIT ? OFFSET ?
     `;
 
