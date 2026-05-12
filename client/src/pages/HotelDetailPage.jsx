@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router";
+import { useNavigate, useParams, useSearchParams } from "react-router";
 import {
     Bath,
     BedDouble,
@@ -77,14 +77,22 @@ export default function HotelDetailPage() {
     const navigate = useNavigate();
     const { currentUser } = useAuth();
 
+    const [urlSearchParams] = useSearchParams();
+
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [hotel, setHotel] = useState(null);
     const [reviews, setReviews] = useState([]);
     const [availableRooms, setAvailableRooms] = useState([]);
     const [selectedImage, setSelectedImage] = useState(0);
-    const [checkInDate, setCheckInDate] = useState(() => toDateInputValue(new Date()));
+    const [checkInDate, setCheckInDate] = useState(() => {
+        const fromUrl = urlSearchParams.get('checkIn');
+        if (fromUrl) return toDateInputValue(new Date(fromUrl));
+        return toDateInputValue(new Date());
+    });
     const [checkOutDate, setCheckOutDate] = useState(() => {
+        const fromUrl = urlSearchParams.get('checkOut');
+        if (fromUrl) return toDateInputValue(new Date(fromUrl));
         const next = new Date();
         next.setDate(next.getDate() + 2);
         return toDateInputValue(next);

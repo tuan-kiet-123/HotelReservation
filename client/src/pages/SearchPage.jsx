@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams, Link } from 'react-router';
+import { useSearchParams, Link, useNavigate } from 'react-router';
 import axios from 'axios';
 import { Search, CalendarDays, Users, MapPin, Star, Building2, SlidersHorizontal, Loader2 } from 'lucide-react';
 import SiteShell from '../components/SiteShell';
@@ -192,7 +192,7 @@ const SearchPage = () => {
                             </div>
                         ) : (
                             filteredHotels.map((hotel) => (
-                                <Link key={hotel._id} to={`/hotels/${hotel._id}`} className="hotel-card">
+                                <Link key={hotel._id} to={`/hotels/${hotel._id}?checkIn=${encodeURIComponent(new Date(checkIn).toISOString())}&checkOut=${encodeURIComponent(new Date(checkOut).toISOString())}`} className="hotel-card">
                                     {/* Ảnh */}
                                     <div className="card-image">
                                         <img src="/Logo.png" alt={hotel.Name} />
