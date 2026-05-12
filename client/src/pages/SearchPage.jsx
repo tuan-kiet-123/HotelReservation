@@ -192,7 +192,7 @@ const SearchPage = () => {
                             </div>
                         ) : (
                             filteredHotels.map((hotel) => (
-                                <Link key={hotel._id} to={`/hotels/${hotel._id}?checkIn=${encodeURIComponent(new Date(checkIn).toISOString())}&checkOut=${encodeURIComponent(new Date(checkOut).toISOString())}`} className="hotel-card">
+                                <Link key={hotel._id} to={`/hotels/${hotel._id}?checkIn=${checkIn}&checkOut=${checkOut}`} className="hotel-card">
                                     {/* Ảnh */}
                                     <div className="card-image">
                                         <img src="/Logo.png" alt={hotel.Name} />

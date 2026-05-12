@@ -221,8 +221,18 @@ const HomePage = () => {
                                     onClick={() => {
                                         const params = new URLSearchParams();
                                         if (searchQuery.trim()) params.append('q', searchQuery.trim());
-                                        if (checkIn) params.append('checkIn', checkIn.toISOString());
-                                        if (checkOut) params.append('checkOut', checkOut.toISOString());
+                                        
+                                        // Đảm bảo luôn có checkIn và checkOut hợp lệ
+                                        const ciDate = checkIn || new Date();
+                                        let coDate = checkOut;
+                                        if (!coDate) {
+                                            coDate = new Date(ciDate);
+                                            coDate.setDate(coDate.getDate() + 1);
+                                        }
+                                        // Format theo giờ địa phương (tránh lệch ngày do UTC)
+                                        const toLocalDate = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                                        params.append('checkIn', toLocalDate(ciDate));
+                                        params.append('checkOut', toLocalDate(coDate));
                                         params.append('roomType', roomType);
                                         navigate(`/hotels?${params.toString()}`);
                                     }}
