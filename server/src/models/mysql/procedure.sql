@@ -600,15 +600,22 @@ CREATE PROCEDURE `sp_CancelReservation` (IN `p_ReservationId` VARCHAR(255))   BE
 
 		SET v_DaysBefore = DATEDIFF(v_CheckInDate, NOW());
 
-		SELECT BasePrice INTO v_TotalAmount FROM Room WHERE RoomId = v_RoomId;
+		-- Tính tổng giá trị đơn đặt phòng (giá mỗi đêm × số đêm)
+		SELECT CurrentPrice * DATEDIFF(r.CheckOutDate, r.CheckInDate) INTO v_TotalAmount 
+		FROM Room rm 
+		INNER JOIN Reservation r ON r.RoomId = rm.RoomId
+		WHERE r.ReservationId = CONVERT(p_ReservationId USING utf8mb4) COLLATE utf8mb4_general_ci;
 
 		IF v_DaysBefore >= 30 THEN
+				-- Trước 30 ngày: hoàn 100%
 				SET v_RefundAmount = v_TotalPaid;
 				SET v_PenaltyAmount = 0;
 		ELSEIF v_DaysBefore >= 7 AND v_DaysBefore < 30 THEN
+				-- Từ 7 đến 30 ngày: không hoàn cọc (phạt 30% tổng giá đơn)
 				SET v_PenaltyAmount = v_TotalAmount * 0.3;
 				SET v_RefundAmount = GREATEST(0, v_TotalPaid - v_PenaltyAmount);
 		ELSE
+				-- Trong vòng 7 ngày hoặc quá hạn: không hoàn
 				SET v_PenaltyAmount = v_TotalPaid;
 				SET v_RefundAmount = 0;
 		END IF;
