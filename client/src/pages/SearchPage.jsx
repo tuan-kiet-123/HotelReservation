@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams, Link } from 'react-router';
+import { useSearchParams, Link, useNavigate } from 'react-router';
 import axios from 'axios';
 import { Search, CalendarDays, Users, MapPin, Star, Building2, SlidersHorizontal, Loader2 } from 'lucide-react';
 import SiteShell from '../components/SiteShell';
+import DatePickerCalendar from '../components/DatePickerCalendar';
 import './SearchPage.css';
 
 const SearchPage = () => {
@@ -19,8 +20,8 @@ const SearchPage = () => {
     const initialRoomType = searchParams.get('roomType') || 'Standard';
 
     const [searchName, setSearchName] = useState(query);
-    const [checkIn, setCheckIn] = useState(initialCheckIn.toISOString().split('T')[0]);
-    const [checkOut, setCheckOut] = useState(initialCheckOut.toISOString().split('T')[0]);
+    const [checkIn, setCheckIn] = useState(initialCheckIn);
+    const [checkOut, setCheckOut] = useState(initialCheckOut);
     const [roomType, setRoomType] = useState(initialRoomType);
 
     // State dữ liệu từ API
@@ -33,8 +34,8 @@ const SearchPage = () => {
             setLoading(true);
             try {
                 // Lấy params đang hiển thị trên URL
-                const currentCheckIn = searchParams.get('checkIn') || checkIn;
-                const currentCheckOut = searchParams.get('checkOut') || checkOut;
+                const currentCheckIn = searchParams.get('checkIn') || toLocalDateStr(checkIn);
+                const currentCheckOut = searchParams.get('checkOut') || toLocalDateStr(checkOut);
                 const currentRoomType = searchParams.get('roomType') || roomType;
 
                 const res = await axios.get(`http://localhost:5000/api/search?checkIn=${currentCheckIn}&checkOut=${currentCheckOut}&roomType=${currentRoomType}`);
@@ -50,11 +51,18 @@ const SearchPage = () => {
         fetchHotels();
     }, [searchParams]);
 
+    // Helper format ngày local
+    const toLocalDateStr = (d) => {
+        if (!d) return '';
+        const date = d instanceof Date ? d : new Date(d);
+        return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+    };
+
     const handleSearch = () => {
         const params = new URLSearchParams();
         if (searchName.trim()) params.append('q', searchName.trim());
-        params.append('checkIn', new Date(checkIn).toISOString());
-        params.append('checkOut', new Date(checkOut).toISOString());
+        params.append('checkIn', toLocalDateStr(checkIn));
+        params.append('checkOut', toLocalDateStr(checkOut || checkIn));
         params.append('roomType', roomType);
         setSearchParams(params);
     };
@@ -86,24 +94,15 @@ const SearchPage = () => {
                                 />
                             </div>
 
-                            {/* Ngày checkin/out */}
-                            <div className="search-info-box" style={{ gap: '8px' }}>
-                                <CalendarDays size={18} color="#f59e0b" />
-                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                    <input 
-                                        type="date" 
-                                        value={checkIn}
-                                        onChange={e => setCheckIn(e.target.value)}
-                                        style={{ background: 'transparent', color: '#fff', border: 'none', outline: 'none', fontSize: '13px' }}
-                                    />
-                                    <span style={{ color: '#64748b' }}>—</span>
-                                    <input 
-                                        type="date" 
-                                        value={checkOut}
-                                        onChange={e => setCheckOut(e.target.value)}
-                                        style={{ background: 'transparent', color: '#fff', border: 'none', outline: 'none', fontSize: '13px' }}
-                                    />
-                                </div>
+                            {/* Ngày checkin/out - Lịch đẹp */}
+                            <div className="search-info-box" style={{ flex: '1.5', padding: 0, border: 'none', background: 'transparent' }}>
+                                <DatePickerCalendar
+                                    checkIn={checkIn}
+                                    checkOut={checkOut}
+                                    onCheckInChange={setCheckIn}
+                                    onCheckOutChange={setCheckOut}
+                                    variant="dark"
+                                />
                             </div>
 
                             {/* Số người / Loại phòng */}
@@ -192,7 +191,7 @@ const SearchPage = () => {
                             </div>
                         ) : (
                             filteredHotels.map((hotel) => (
-                                <Link key={hotel._id} to={`/hotels/${hotel._id}`} className="hotel-card">
+                                <Link key={hotel._id} to={`/hotels/${hotel._id}?checkIn=${toLocalDateStr(checkIn)}&checkOut=${toLocalDateStr(checkOut)}`} className="hotel-card">
                                     {/* Ảnh */}
                                     <div className="card-image">
                                         <img src="/Logo.png" alt={hotel.Name} />

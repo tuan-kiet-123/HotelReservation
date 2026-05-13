@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router";
+import { useNavigate, useParams, useSearchParams } from "react-router";
 import {
     Bath,
     BedDouble,
@@ -17,6 +17,7 @@ import {
     Wifi
 } from "lucide-react";
 import SiteShell from "../components/SiteShell";
+import DatePickerCalendar from "../components/DatePickerCalendar";
 import { fetchAvailableRooms, fetchHotelById, fetchReviewsByHotel } from "../lib/api";
 import { useAuth } from "../lib/auth";
 
@@ -77,17 +78,25 @@ export default function HotelDetailPage() {
     const navigate = useNavigate();
     const { currentUser } = useAuth();
 
+    const [urlSearchParams] = useSearchParams();
+
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [hotel, setHotel] = useState(null);
     const [reviews, setReviews] = useState([]);
     const [availableRooms, setAvailableRooms] = useState([]);
     const [selectedImage, setSelectedImage] = useState(0);
-    const [checkInDate, setCheckInDate] = useState(() => toDateInputValue(new Date()));
+    const [checkInDate, setCheckInDate] = useState(() => {
+        const fromUrl = urlSearchParams.get('checkIn');
+        if (fromUrl) return new Date(fromUrl + 'T00:00:00');
+        return new Date();
+    });
     const [checkOutDate, setCheckOutDate] = useState(() => {
+        const fromUrl = urlSearchParams.get('checkOut');
+        if (fromUrl) return new Date(fromUrl + 'T00:00:00');
         const next = new Date();
         next.setDate(next.getDate() + 2);
-        return toDateInputValue(next);
+        return next;
     });
 
     useEffect(() => {
@@ -138,8 +147,8 @@ export default function HotelDetailPage() {
                 return;
             }
 
-            const checkInIso = toSearchIsoValue(checkInDate);
-            const checkOutIso = toSearchIsoValue(checkOutDate);
+            const checkInIso = checkInDate ? checkInDate.toISOString() : null;
+            const checkOutIso = checkOutDate ? checkOutDate.toISOString() : null;
 
             if (!checkInIso || !checkOutIso) {
                 setAvailableRooms([]);
@@ -240,26 +249,13 @@ export default function HotelDetailPage() {
                                         <p className="text-lg font-semibold text-slate-900">{hotel.SqlHotelId || "HT91000001"}</p>
                                     </div> */}
 
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                        <div>
-                                            <label className="text-xs font-semibold text-slate-500">Check-in</label>
-                                            <input
-                                                type="datetime-local"
-                                                value={checkInDate}
-                                                onChange={(event) => setCheckInDate(event.target.value)}
-                                                className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="text-xs font-semibold text-slate-500">Check-out</label>
-                                            <input
-                                                type="datetime-local"
-                                                value={checkOutDate}
-                                                onChange={(event) => setCheckOutDate(event.target.value)}
-                                                className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                                            />
-                                        </div>
-                                    </div>
+                                    <DatePickerCalendar
+                                        checkIn={checkInDate}
+                                        checkOut={checkOutDate}
+                                        onCheckInChange={setCheckInDate}
+                                        onCheckOutChange={setCheckOutDate}
+                                        variant="light"
+                                    />
 
                                     <button
                                         type="button"
