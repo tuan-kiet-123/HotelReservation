@@ -42,6 +42,15 @@ function calculateNights(start, end) {
     return Math.max(1, diffDays);
 }
 
+function toDateOnly(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+        return null;
+    }
+    date.setHours(0, 0, 0, 0);
+    return date;
+}
+
 function formatVnd(value) {
     return Number(value || 0).toLocaleString("vi-VN") + " VND";
 }
@@ -74,13 +83,16 @@ export default function CheckoutPaymentPage() {
     const totalAmount = pricePerNight * nights;
 
     const daysUntilCheckIn = useMemo(() => {
-        const checkIn = new Date(checkInDate);
-        const now = new Date();
-        const diffMs = checkIn.getTime() - now.getTime();
+        const checkIn = toDateOnly(checkInDate);
+        const today = toDateOnly(new Date());
+        if (!checkIn || !today) {
+            return 0;
+        }
+        const diffMs = checkIn.getTime() - today.getTime();
         return Math.floor(diffMs / (1000 * 60 * 60 * 24));
     }, [checkInDate]);
 
-    const payPercent = daysUntilCheckIn > 7 ? 30 : 100;
+    const payPercent = daysUntilCheckIn >= 7 ? 30 : 100;
     const payNow = payPercent === 30 ? totalAmount * 0.3 : totalAmount;
 
     useEffect(() => {
@@ -171,7 +183,7 @@ export default function CheckoutPaymentPage() {
                     <div className="mb-6">
                         <p className="text-s uppercase tracking-[0.2em] text-amber-600 font-semibold">Checkout and Payment</p>
                         <h1 className="text-3xl font-bold text-slate-900 mt-2">Thanh toán đặt phòng</h1>
-                        <p className="text-slate-600 mt-2">Trang này xử lý đúng quy tắc cọc 30% nếu đặt trước hơn 7 ngày, ngược lại thu 100%.</p>
+                        <p className="text-slate-600 mt-2">Trang này xử lý đúng quy tắc cọc 30% nếu đặt trước từ 7 ngày trở lên, ngược lại thu 100%.</p>
                     </div>
 
                     <div className="grid lg:grid-cols-5 gap-6">
