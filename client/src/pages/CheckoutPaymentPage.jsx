@@ -3,29 +3,20 @@ import { useLocation, useNavigate } from "react-router";
 import { AlertTriangle, CalendarDays, CreditCard, Landmark, LoaderCircle, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import SiteShell from "../components/SiteShell";
-import { createBooking } from "../lib/api";
+import { createBooking, simulatePaymentWebhook } from "../lib/api";
 import { upsertBooking } from "../lib/bookingStorage";
 import { useAuth } from "../lib/auth";
 
 function toDateTimeLocalValue(dateValue) {
-    if (!dateValue) {
-        return "";
-    }
-
+    if (!dateValue) return "";
     const date = new Date(dateValue);
-    if (Number.isNaN(date.getTime())) {
-        return "";
-    }
-
+    if (Number.isNaN(date.getTime())) return "";
     const offset = date.getTimezoneOffset() * 60000;
     return new Date(date.getTime() - offset).toISOString().slice(0, 16);
 }
 
 function toMysqlDateTime(localValue) {
-    if (!localValue) {
-        return "";
-    }
-
+    if (!localValue) return "";
     const normalized = localValue.replace("T", " ");
     return normalized.length === 16 ? `${normalized}:00` : normalized;
 }
@@ -33,10 +24,7 @@ function toMysqlDateTime(localValue) {
 function calculateNights(start, end) {
     const checkIn = new Date(start);
     const checkOut = new Date(end);
-    if (Number.isNaN(checkIn.getTime()) || Number.isNaN(checkOut.getTime())) {
-        return 1;
-    }
-
+    if (Number.isNaN(checkIn.getTime()) || Number.isNaN(checkOut.getTime())) return 1;
     const diffMs = checkOut.getTime() - checkIn.getTime();
     const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
     return Math.max(1, diffDays);
@@ -44,9 +32,7 @@ function calculateNights(start, end) {
 
 function toDateOnly(value) {
     const date = new Date(value);
-    if (Number.isNaN(date.getTime())) {
-        return null;
-    }
+    if (Number.isNaN(date.getTime())) return null;
     date.setHours(0, 0, 0, 0);
     return date;
 }
@@ -65,9 +51,7 @@ export default function CheckoutPaymentPage() {
 
     const [userId, setUserId] = useState(location.state?.userId || "");
     const [roomId, setRoomId] = useState(selectedRoom?.roomId || selectedRoom?.RoomId || "");
-    const [checkInDate, setCheckInDate] = useState(
-        toDateTimeLocalValue(location.state?.checkInDate || new Date())
-    );
+    const [checkInDate, setCheckInDate] = useState(toDateTimeLocalValue(location.state?.checkInDate || new Date()));
     const [checkOutDate, setCheckOutDate] = useState(() => {
         const fallback = new Date();
         fallback.setDate(fallback.getDate() + 2);
@@ -77,6 +61,7 @@ export default function CheckoutPaymentPage() {
     const [cardNumber, setCardNumber] = useState("");
     const [cardOwner, setCardOwner] = useState("");
     const [processing, setProcessing] = useState(false);
+    const [processingMessage, setProcessingMessage] = useState("");
 
     const pricePerNight = Number(selectedRoom?.price || selectedRoom?.CurrentPrice || 0);
     const nights = useMemo(() => calculateNights(checkInDate, checkOutDate), [checkInDate, checkOutDate]);
@@ -85,9 +70,7 @@ export default function CheckoutPaymentPage() {
     const daysUntilCheckIn = useMemo(() => {
         const checkIn = toDateOnly(checkInDate);
         const today = toDateOnly(new Date());
-        if (!checkIn || !today) {
-            return 0;
-        }
+        if (!checkIn || !today) return 0;
         const diffMs = checkIn.getTime() - today.getTime();
         return Math.floor(diffMs / (1000 * 60 * 60 * 24));
     }, [checkInDate]);
@@ -103,7 +86,7 @@ export default function CheckoutPaymentPage() {
         }
 
         if (!currentUser) {
-            toast.warning("Vui lòng chọn user demo trước khi thanh toán");
+            toast.warning("Vui lòng đăng nhập trước khi thanh toán");
             navigate(-1);
             return;
         }
@@ -127,6 +110,7 @@ export default function CheckoutPaymentPage() {
         }
 
         setProcessing(true);
+        setProcessingMessage("Đang khởi tạo giao dịch an toàn...");
 
         try {
             const payload = {
@@ -144,6 +128,17 @@ export default function CheckoutPaymentPage() {
             }
 
             const reservationId = bookingData.reservationId;
+            const paymentId = bookingData.paymentId; // Lấy paymentId từ Backend
+
+            setProcessingMessage("Đang chuyển hướng sang Cổng thanh toán (VNPay/MoMo)...");
+            
+            // Giả lập: User thanh toán trên app mất khoảng 3 giây
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            
+            setProcessingMessage("Đang chờ xác nhận từ Webhook...");
+
+            // Bắn Webhook để backend cập nhật Pending -> Completed/Confirmed
+            await simulatePaymentWebhook({ paymentId });
 
             upsertBooking({
                 reservationId,
@@ -166,90 +161,91 @@ export default function CheckoutPaymentPage() {
                 reviewSubmitted: false
             });
 
-            toast.success(`Đặt phòng thành công: ${reservationId}`);
+            toast.success(`Đặt phòng & Thanh toán thành công: ${reservationId}`);
             navigate("/my-bookings");
         } catch (error) {
             toast.error(error?.response?.data?.message || error.message || "Đặt phòng không thành công");
         } finally {
             setProcessing(false);
+            setProcessingMessage("");
         }
     }
 
     return (
         <SiteShell>
-            <section className="relative overflow-hidden min-h-[calc(100vh-4rem)] bg-slate-100">
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(245,158,11,0.22),_rgba(255,255,255,0.1))]" />
+            <section className="relative overflow-hidden min-h-[calc(100vh-4rem)] bg-slate-50">
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(46,196,182,0.15),_rgba(255,255,255,0.1))]" />
                 <div className="max-w-6xl mx-auto px-4 py-10 relative">
-                    <div className="mb-6">
-                        <p className="text-s uppercase tracking-[0.2em] text-amber-600 font-semibold">Checkout and Payment</p>
-                        <h1 className="text-3xl font-bold text-slate-900 mt-2">Thanh toán đặt phòng</h1>
-                        <p className="text-slate-600 mt-2">Trang này xử lý đúng quy tắc cọc 30% nếu đặt trước từ 7 ngày trở lên, ngược lại thu 100%.</p>
+                    <div className="mb-8">
+                        <p className="text-sm uppercase tracking-[0.2em] text-[#FF6F61] font-bold">Thanh toán an toàn</p>
+                        <h1 className="text-4xl font-black text-slate-800 mt-2">Xác nhận đặt phòng</h1>
+                        <p className="text-slate-500 font-medium mt-2">Bảo mật đa lớp, xử lý nhanh chóng chỉ với vài thao tác.</p>
                     </div>
 
-                    <div className="grid lg:grid-cols-5 gap-6">
-                        <form onSubmit={handleCheckout} className="lg:col-span-3 rounded-3xl bg-white border border-slate-200 p-6 shadow-lg space-y-5">
-                            <div className="grid sm:grid-cols-2 gap-4">
+                    <div className="grid lg:grid-cols-5 gap-8">
+                        <form onSubmit={handleCheckout} className="lg:col-span-3 rounded-3xl bg-white border border-white p-8 shadow-2xl space-y-6">
+                            <div className="grid sm:grid-cols-2 gap-5">
                                 <div>
-                                    <label className="text-xs font-semibold text-slate-500">RoomId</label>
+                                    <label className="text-xs font-bold text-slate-700 mb-1.5 block">RoomId</label>
                                     <input
                                         value={roomId}
                                         readOnly
-                                        className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm"
+                                        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600 outline-none"
                                         required
                                     />
                                 </div>
                                 <div>
-                                    <label className="text-xs font-semibold text-slate-500">UserId</label>
+                                    <label className="text-xs font-bold text-slate-700 mb-1.5 block">UserId</label>
                                     <input
                                         value={userId}
                                         readOnly
-                                        className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm"
+                                        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600 outline-none"
                                         required
                                     />
                                 </div>
                             </div>
 
-                            <div className="grid sm:grid-cols-2 gap-4">
+                            <div className="grid sm:grid-cols-2 gap-5">
                                 <div>
-                                    <label className="text-xs font-semibold text-slate-500">Check-in</label>
+                                    <label className="text-xs font-bold text-slate-700 mb-1.5 block">Check-in</label>
                                     <input
                                         type="datetime-local"
                                         value={checkInDate}
                                         readOnly
-                                        className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm"
+                                        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600 outline-none"
                                         required
                                     />
                                 </div>
                                 <div>
-                                    <label className="text-xs font-semibold text-slate-500">Check-out</label>
+                                    <label className="text-xs font-bold text-slate-700 mb-1.5 block">Check-out</label>
                                     <input
                                         type="datetime-local"
                                         value={checkOutDate}
                                         readOnly
-                                        className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm"
+                                        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600 outline-none"
                                         required
                                     />
                                 </div>
                             </div>
 
-                            <div className="rounded-2xl border border-slate-200 p-4 bg-slate-50">
-                                <h2 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                                    <CreditCard className="w-4 h-4 text-amber-500" /> Thông tin thanh toán giả lập
+                            <div className="rounded-2xl border border-[#2EC4B6]/20 p-5 bg-[#2EC4B6]/5">
+                                <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2 mb-4">
+                                    <CreditCard className="w-4 h-4 text-[#2EC4B6]" /> Thông tin thanh toán (Mock)
                                 </h2>
 
-                                <div className="mt-3 grid sm:grid-cols-2 gap-3">
+                                <div className="grid sm:grid-cols-2 gap-4">
                                     <input
                                         value={cardOwner}
                                         onChange={(event) => setCardOwner(event.target.value)}
-                                        placeholder="Tên chủ thẻ"
-                                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                        placeholder="Tên in trên thẻ"
+                                        className="w-full rounded-xl border border-white bg-white px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-[#2EC4B6]/30 outline-none transition-all shadow-sm"
                                         required
                                     />
                                     <input
                                         value={cardNumber}
                                         onChange={(event) => setCardNumber(event.target.value)}
-                                        placeholder="Số thẻ (demo)"
-                                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                        placeholder="Số thẻ (VD: 4123...)"
+                                        className="w-full rounded-xl border border-white bg-white px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-[#2EC4B6]/30 outline-none transition-all shadow-sm"
                                         required
                                     />
                                 </div>
@@ -258,53 +254,55 @@ export default function CheckoutPaymentPage() {
                             <button
                                 type="submit"
                                 disabled={processing}
-                                className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold shadow-md shadow-amber-500/30 disabled:opacity-60"
+                                className="w-full py-4 rounded-xl bg-[#FF6F61] hover:bg-[#FF5A4A] text-white font-bold shadow-xl shadow-[#FF6F61]/30 transition-all disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer text-base mt-4"
                             >
-                                {processing ? "Đang xử lý giao dịch..." : "Thanh toán và xác nhận đặt phòng"}
+                                {processing ? "Đang xử lý giao dịch..." : "Thanh toán và Xác nhận"}
                             </button>
                         </form>
 
-                        <aside className="lg:col-span-2 space-y-4">
-                            <div className="rounded-3xl bg-white border border-slate-200 p-6 shadow-lg">
-                                <h3 className="text-lg font-bold text-slate-900">Tóm tắt đơn</h3>
-                                <div className="mt-4 space-y-2 text-sm text-slate-600">
-                                    <p className="flex items-center justify-between"><span>Khách sạn</span><span className="font-medium text-slate-900">{selectedHotel?.Name || "DaVinci Resort"}</span></p>
-                                    <p className="flex items-center justify-between"><span>Phòng</span><span className="font-medium text-slate-900">{roomId}</span></p>
-                                    <p className="flex items-center justify-between"><span>Số đêm</span><span className="font-medium text-slate-900">{nights}</span></p>
-                                    <p className="flex items-center justify-between"><span>Đơn giá/đêm</span><span className="font-medium text-slate-900">{formatVnd(pricePerNight)}</span></p>
-                                    <p className="pt-2 mt-2 border-t border-slate-200 flex items-center justify-between text-base font-semibold text-slate-900">
+                        <aside className="lg:col-span-2 space-y-6">
+                            <div className="rounded-3xl bg-white border border-white p-6 shadow-xl">
+                                <h3 className="text-xl font-black text-slate-800 mb-4 pb-4 border-b border-slate-100">Tóm tắt đơn đặt phòng</h3>
+                                <div className="space-y-3 text-sm font-medium text-slate-500">
+                                    <p className="flex items-center justify-between"><span>Khách sạn</span><span className="font-bold text-slate-800 text-right w-1/2 truncate">{selectedHotel?.Name || "DaVinci Resort"}</span></p>
+                                    <p className="flex items-center justify-between"><span>Phòng</span><span className="font-bold text-slate-800">{roomId}</span></p>
+                                    <p className="flex items-center justify-between"><span>Số đêm</span><span className="font-bold text-slate-800">{nights}</span></p>
+                                    <p className="flex items-center justify-between"><span>Đơn giá/đêm</span><span className="font-bold text-slate-800">{formatVnd(pricePerNight)}</span></p>
+                                    <div className="pt-4 mt-2 border-t border-slate-100 flex items-center justify-between text-lg font-black text-slate-800">
                                         <span>Tổng cộng</span>
                                         <span>{formatVnd(totalAmount)}</span>
-                                    </p>
+                                    </div>
                                 </div>
                             </div>
 
-                            <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6 shadow-lg">
-                                <h3 className="text-sm font-semibold text-amber-900 flex items-center gap-2">
-                                    <Landmark className="w-4 h-4" /> Chính sách thu tiền
+                            <div className="rounded-3xl border border-[#FF6F61]/20 bg-[#FF6F61]/5 p-6 shadow-xl">
+                                <h3 className="text-sm font-bold text-[#FF6F61] flex items-center gap-2">
+                                    <Landmark className="w-5 h-5" /> Chính sách thu tiền
                                 </h3>
-                                <p className="text-sm text-amber-800 mt-2 leading-relaxed">
+                                <p className="text-sm font-medium text-slate-700 mt-3 leading-relaxed">
                                     {payPercent === 30
-                                        ? "Bạn đang đặt trước hơn 7 ngày, hệ thống chỉ thu cọc 30% lúc đặt phòng."
-                                        : "Bạn đặt gần ngày check-in, hệ thống thu 100% tại thời điểm đặt phòng."}
+                                        ? "Bạn đang đặt trước hơn 7 ngày, hệ thống hỗ trợ chỉ thu cọc 30% lúc đặt phòng."
+                                        : "Ngày Check-in sắp đến, hệ thống yêu cầu thu 100% tại thời điểm đặt phòng."}
                                 </p>
-                                <p className="mt-3 text-lg font-bold text-amber-900">Thanh toán ngay: {formatVnd(payNow)}</p>
+                                <p className="mt-4 pt-4 border-t border-[#FF6F61]/10 text-xl font-black text-[#FF6F61]">
+                                    Thanh toán ngay: {formatVnd(payNow)}
+                                </p>
                             </div>
 
-                            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-lg text-sm text-slate-600 space-y-2">
-                                <p className="flex items-center gap-2"><CalendarDays className="w-4 h-4 text-amber-500" /> Ngày check-in còn lại: {daysUntilCheckIn} ngày</p>
-                                <p className="flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-amber-500" /> Giao dịch được xử lý atomically bằng procedure MySQL</p>
-                                <p className="flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-amber-500" /> Nếu mạng lỗi, transaction sẽ rollback</p>
+                            <div className="rounded-3xl border border-white bg-white p-6 shadow-xl text-xs font-semibold text-slate-500 space-y-3">
+                                <p className="flex items-center gap-2"><CalendarDays className="w-4 h-4 text-[#2EC4B6]" /> Ngày check-in còn lại: <span className="text-slate-700">{daysUntilCheckIn} ngày</span></p>
+                                <p className="flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-[#2EC4B6]" /> Giao dịch được bảo mật tuyệt đối an toàn</p>
+                                <p className="flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-[#FF6F61]" /> Tiền sẽ được hoàn 100% nếu bạn huỷ trước 48h</p>
                             </div>
                         </aside>
                     </div>
                 </div>
 
                 {processing && (
-                    <div className="fixed inset-0 z-[80] bg-slate-950/60 backdrop-blur-sm flex items-center justify-center px-4">
-                        <div className="rounded-2xl bg-white px-6 py-5 shadow-xl border border-slate-200 flex items-center gap-3">
-                            <LoaderCircle className="w-5 h-5 animate-spin text-amber-500" />
-                            <p className="text-sm font-medium text-slate-700">Đang khóa giao dịch và gọi SP_BookRoom...</p>
+                    <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center px-4">
+                        <div className="rounded-3xl bg-white px-8 py-6 shadow-2xl flex flex-col items-center gap-4">
+                            <LoaderCircle className="w-10 h-10 animate-spin text-[#2EC4B6]" />
+                            <p className="text-base font-bold text-slate-700">{processingMessage || "Đang xử lý giao dịch an toàn..."}</p>
                         </div>
                     </div>
                 )}

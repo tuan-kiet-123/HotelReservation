@@ -15,6 +15,7 @@ import AdminFinancialLedger from "./pages/admin/AdminFinancialLedger";
 import AdminBookings from "./pages/admin/AdminBookings";
 import AdminAnalytics from "./pages/admin/AdminAnalytics";
 import AdminPriceLogs from "./pages/admin/AdminPriceLogs";
+import AdminLogin from "./pages/admin/AdminLogin";
 
 function App() {
   return (
@@ -29,6 +30,7 @@ function App() {
           <Route path="/reviews/new" element={<ReviewOverlayPage />} />
           
           {/* Admin Routes */}
+          <Route path="/admin/login" element={<AdminLogin />} />
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<AdminDashboard />} />
             <Route path="ledger" element={<AdminFinancialLedger />} />

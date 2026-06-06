@@ -55,6 +55,7 @@ async function bookRoom(input) {
             message: parsed.message,
             data: {
                 reservationId: row.ReservationId || null,
+                paymentId: row.PaymentId || null,
                 paymentType: row.PaymentType || null,
                 amountPaid: Number(row.AmountPaid || 0)
             }
@@ -290,11 +291,33 @@ async function cancelReservation(input) {
     };
 }
 
+async function processPaymentWebhook(input) {
+    try {
+        const [rows] = await pool.query("CALL sp_ConfirmBookingWebhook(?)", [
+            input.paymentId
+        ]);
+
+        const row = getFirstRow(rows);
+        const parsed = parseHttpMessage(row.Message);
+
+        return {
+            statusCode: parsed.statusCode,
+            message: parsed.message,
+            data: {
+                paymentId: input.paymentId
+            }
+        };
+    } catch (error) {
+        throw error;
+    }
+}
+
 module.exports = {
     bookRoom,
     processCheckInPayment,
     processCheckOut,
     getAdminBookings,
     cancelReservation,
-    getReservations
+    getReservations,
+    processPaymentWebhook
 };

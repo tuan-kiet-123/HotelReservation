@@ -1,11 +1,9 @@
 const path = require("path");
 const dotenv = require("dotenv");
 
-const rootEnvPath = path.resolve(__dirname, "../../../.env");
+// Chỉ load từ server/.env (đã chuyển sang MySQL local)
 const serverEnvPath = path.resolve(__dirname, "../../.env");
-
-dotenv.config({ path: rootEnvPath });
-dotenv.config({ path: serverEnvPath, override: false });
+dotenv.config({ path: serverEnvPath });
 
 function getEnv(name, fallback) {
   const value = process.env[name];

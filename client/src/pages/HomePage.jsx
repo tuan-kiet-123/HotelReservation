@@ -81,7 +81,7 @@ const HomePage = () => {
             }
             try {
                 // Fetch up to 5 hotel suggestions
-                const res = await axios.get(`http://localhost:5000/api/mongo/hotels/suggestions?q=${encodeURIComponent(searchQuery)}`);
+                const res = await apiClient.get(`/mongo/hotels/suggestions?q=${encodeURIComponent(searchQuery)}`);
                 if (res.data.success) {
                     setSuggestions(res.data.data);
                 }
@@ -113,15 +113,12 @@ const HomePage = () => {
     const handleDateClick = (day, month, year) => {
         const clicked = new Date(year, month, day)
         if (!checkIn || (checkIn && checkOut)) {
-            // First click or reset: set check-in
             setCheckIn(clicked)
             setCheckOut(null)
         } else {
-            // Second click: set check-out (must be after check-in)
             if (clicked > checkIn) {
                 setCheckOut(clicked)
             } else {
-                // If clicked before/same as check-in, reset check-in
                 setCheckIn(clicked)
                 setCheckOut(null)
             }
@@ -153,9 +150,9 @@ const HomePage = () => {
                         onClick={() => handleDateClick(d, month, year)}
                         className={`w-9 h-9 rounded-full text-sm font-medium transition-all duration-150 cursor-pointer
                             ${isPast ? 'text-slate-300 cursor-not-allowed' : ''}
-                            ${isCI ? 'bg-amber-500 text-white shadow-md' : ''}
+                            ${isCI ? 'bg-teal-500 text-white shadow-md' : ''}
                             ${isCO ? 'bg-emerald-500 text-white shadow-md' : ''}
-                            ${isRange ? 'bg-amber-100 text-amber-700' : ''}
+                            ${isRange ? 'bg-teal-50 text-teal-700' : ''}
                             ${!isPast && !isCI && !isCO && !isRange ? 'text-slate-700 hover:bg-slate-100' : ''}
                         `}
                     >
@@ -185,13 +182,13 @@ const HomePage = () => {
         <SiteShell>
             <main className="flex-1 flex flex-col">
                 {/* Hero Section */}
-                <section className="relative w-full flex-1 min-h-[calc(100vh-4rem)] flex items-center justify-center bg-[url('/bg_HomePage.jpg')] bg-cover bg-center bg-no-repeat">
-                    <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-[1px]"></div>
+                <section className="relative w-full flex-1 min-h-[calc(100vh-4rem)] flex items-center justify-center bg-[url('/bg_HomePage.jpg')] bg-cover bg-center bg-no-repeat rounded-b-[40px] overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/60"></div>
 
                     <div className="relative z-10 flex flex-col items-center gap-6 px-4 max-w-4xl mx-auto text-center -mt-20">
                         <div className="flex flex-col gap-3">
                             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white leading-tight tracking-tight drop-shadow-md">
-                                Tìm kiếm <span className="text-amber-400">Khách sạn</span> hoàn hảo cho kỳ nghỉ của bạn
+                                Khám phá kỳ nghỉ <br/><span className="text-[#2EC4B6]">trong mơ</span> của bạn
                             </h1>
                             <p className="text-lg font-medium text-slate-200 max-w-2xl mx-auto drop-shadow-md">
                                 Khám phá hàng nghìn khách sạn nghỉ dưỡng cao cấp với giá tốt nhất. Đặt phòng nhanh chóng, dễ dàng và an toàn.
@@ -200,9 +197,9 @@ const HomePage = () => {
 
                         {/* Search Bar */}
                         <div className="w-full max-w-2xl relative" ref={searchRef}>
-                            <div className="flex items-center bg-white rounded-full shadow-xl overflow-hidden transition-all duration-300 hover:shadow-2xl relative z-20">
+                            <div className="flex items-center bg-white/95 backdrop-blur-xl border border-white rounded-full shadow-2xl overflow-hidden transition-all duration-300 hover:shadow-xl relative z-20">
                                 <div className="flex items-center gap-3 flex-1 px-6 py-4">
-                                    <Search className="w-5 h-5 text-slate-400 shrink-0" />
+                                    <Search className="w-5 h-5 text-teal-500 shrink-0" />
                                     <input
                                         type="text"
                                         placeholder="Tìm theo tên khách sạn, địa điểm..."
@@ -214,38 +211,35 @@ const HomePage = () => {
                                         onFocus={() => {
                                             if (searchQuery.trim()) setShowSuggestions(true);
                                         }}
-                                        className="w-full bg-transparent outline-none text-slate-700 placeholder:text-slate-400 text-base"
+                                        className="w-full bg-transparent outline-none text-slate-700 placeholder:text-slate-400 text-base font-semibold"
                                     />
                                 </div>
                                 <button 
                                     onClick={() => {
                                         const params = new URLSearchParams();
                                         if (searchQuery.trim()) params.append('q', searchQuery.trim());
-                                        
-                                        // Đảm bảo luôn có checkIn và checkOut hợp lệ
                                         const ciDate = checkIn || new Date();
                                         let coDate = checkOut;
                                         if (!coDate) {
                                             coDate = new Date(ciDate);
                                             coDate.setDate(coDate.getDate() + 1);
                                         }
-                                        // Format theo giờ địa phương (tránh lệch ngày do UTC)
                                         const toLocalDate = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
                                         params.append('checkIn', toLocalDate(ciDate));
                                         params.append('checkOut', toLocalDate(coDate));
                                         params.append('roomType', roomType);
                                         navigate(`/hotels?${params.toString()}`);
                                     }}
-                                    className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-orange-400 hover:from-amber-600 hover:to-orange-500 text-white font-semibold px-8 py-4 m-1.5 rounded-full transition-all duration-300 cursor-pointer shrink-0"
+                                    className="flex items-center gap-2 bg-[#FF6F61] hover:bg-[#FF5A4A] text-white font-bold px-8 py-4 m-1.5 rounded-full transition-transform hover:-translate-y-0.5 shadow-lg shadow-[#FF6F61]/30 cursor-pointer shrink-0"
                                 >
                                     <Search className="w-4 h-4" />
-                                    Search
+                                    Tìm Kiếm
                                 </button>
                             </div>
                             
                             {/* Autocomplete Dropdown */}
                             {showSuggestions && suggestions.length > 0 && (
-                                <div className="absolute top-[calc(100%-1.5rem)] pt-8 left-0 right-0 bg-white rounded-b-3xl shadow-2xl border-t border-slate-100 overflow-hidden z-10">
+                                <div className="absolute top-[calc(100%-1.5rem)] pt-8 left-0 right-0 bg-white/95 backdrop-blur-xl rounded-b-3xl shadow-2xl border border-white overflow-hidden z-10">
                                     {suggestions.map((item, idx) => (
                                         <button 
                                             key={item._id || idx}
@@ -253,10 +247,10 @@ const HomePage = () => {
                                                 setSearchQuery(item.Name);
                                                 setShowSuggestions(false);
                                             }}
-                                            className="w-full text-left px-6 py-3 hover:bg-slate-50 transition-colors flex items-center gap-4 border-b border-slate-50 last:border-0 cursor-pointer"
+                                            className="w-full text-left px-6 py-3 hover:bg-teal-50 transition-colors flex items-center gap-4 border-b border-slate-100 last:border-0 cursor-pointer"
                                         >
-                                            <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center shrink-0">
-                                                <MapPin className="w-5 h-5 text-amber-500" />
+                                            <div className="w-10 h-10 rounded-full bg-teal-50 flex items-center justify-center shrink-0">
+                                                <MapPin className="w-5 h-5 text-teal-500" />
                                             </div>
                                             <div>
                                                 <p className="text-sm font-semibold text-slate-800">{item.Name}</p>
@@ -275,21 +269,21 @@ const HomePage = () => {
                             <div ref={dateRef} className="relative flex-1">
                                 <button
                                     onClick={() => { setShowDatePicker(!showDatePicker); setShowGuestPicker(false) }}
-                                    className="w-full flex items-center gap-4 bg-white/95 backdrop-blur-sm rounded-2xl px-5 py-4 shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer text-left"
+                                    className="w-full flex items-center gap-4 bg-white/95 backdrop-blur-md border border-white rounded-2xl px-5 py-4 shadow-xl hover:shadow-2xl transition-all duration-300 cursor-pointer text-left"
                                 >
                                     <div className="flex items-center gap-4 flex-1">
                                         <div className="flex items-center gap-3 flex-1 border-r border-slate-200 pr-4">
-                                            <CalendarDays className="w-5 h-5 text-amber-500 shrink-0" />
+                                            <CalendarDays className="w-5 h-5 text-teal-500 shrink-0" />
                                             <div>
-                                                <p className="text-sm font-semibold text-slate-800">{formatDate(checkIn)}</p>
-                                                <p className="text-xs text-slate-400">{getDayName(checkIn)}</p>
+                                                <p className="text-sm font-bold text-slate-800">{formatDate(checkIn)}</p>
+                                                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{getDayName(checkIn)}</p>
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-3 flex-1">
-                                            <CalendarDays className="w-5 h-5 text-amber-500 shrink-0" />
+                                            <CalendarDays className="w-5 h-5 text-teal-500 shrink-0" />
                                             <div>
-                                                <p className="text-sm font-semibold text-slate-800">{checkOut ? formatDate(checkOut) : 'Chọn ngày'}</p>
-                                                <p className="text-xs text-slate-400">{checkOut ? getDayName(checkOut) : 'Check-out'}</p>
+                                                <p className="text-sm font-bold text-slate-800">{checkOut ? formatDate(checkOut) : 'Chọn ngày'}</p>
+                                                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{checkOut ? getDayName(checkOut) : 'Check-out'}</p>
                                             </div>
                                         </div>
                                     </div>
@@ -297,20 +291,20 @@ const HomePage = () => {
 
                                 {/* Calendar Dropdown */}
                                 {showDatePicker && (
-                                    <div className="absolute top-full mt-3 left-1/2 -translate-x-1/2 bg-white rounded-2xl shadow-2xl border border-slate-100 p-6 z-50 w-[340px] max-w-[95vw]">
+                                    <div className="absolute top-full mt-3 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl border border-white p-6 z-50 w-[340px] max-w-[95vw]">
                                         <div className="flex items-center justify-between mb-2">
                                             <button onClick={goBack} className="p-2 hover:bg-slate-100 rounded-full transition-colors cursor-pointer">
                                                 <ChevronLeft className="w-5 h-5 text-slate-500" />
                                             </button>
-                                            <span className="text-sm font-medium text-slate-500">
+                                            <span className="text-sm font-bold text-slate-700">
                                                 {!checkIn || (checkIn && checkOut) ? 'Chọn ngày Check-in' : 'Chọn ngày Check-out'}
                                             </span>
                                             <button onClick={goForward} className="p-2 hover:bg-slate-100 rounded-full transition-colors cursor-pointer">
                                                 <ChevronRight className="w-5 h-5 text-slate-500" />
                                             </button>
                                         </div>
-                                        <div className="flex items-center justify-center gap-4 mb-4 text-xs">
-                                            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-amber-500 inline-block"></span> Check-in</span>
+                                        <div className="flex items-center justify-center gap-4 mb-4 text-xs font-semibold">
+                                            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-teal-500 inline-block"></span> Check-in</span>
                                             <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-emerald-500 inline-block"></span> Check-out</span>
                                         </div>
                                         {renderCalendar(calMonth, calYear)}
@@ -322,22 +316,22 @@ const HomePage = () => {
                             <div ref={guestRef} className="relative sm:w-56">
                                 <button
                                     onClick={() => { setShowGuestPicker(!showGuestPicker); setShowDatePicker(false) }}
-                                    className="w-full flex items-center gap-3 bg-white/95 backdrop-blur-sm rounded-2xl px-5 py-4 shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer text-left"
+                                    className="w-full flex items-center gap-3 bg-white/95 backdrop-blur-md border border-white rounded-2xl px-5 py-4 shadow-xl hover:shadow-2xl transition-all duration-300 cursor-pointer text-left"
                                 >
-                                    <Users className="w-5 h-5 text-amber-500 shrink-0" />
+                                    <Users className="w-5 h-5 text-teal-500 shrink-0" />
                                     <div className="flex-1">
-                                        <p className="text-sm font-semibold text-slate-800">{adults} người lớn</p>
-                                        <p className="text-xs text-slate-400">{roomType}{children > 0 ? ` · ${children} trẻ em` : ''}</p>
+                                        <p className="text-sm font-bold text-slate-800">{adults} người lớn</p>
+                                        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{roomType}{children > 0 ? ` · ${children} trẻ em` : ''}</p>
                                     </div>
                                     <ChevronLeft className="w-4 h-4 text-slate-400 rotate-[-90deg]" />
                                 </button>
 
                                 {/* Guest Dropdown */}
                                 {showGuestPicker && (
-                                    <div className="absolute top-full mt-3 right-0 bg-white rounded-2xl shadow-2xl border border-slate-100 p-6 z-50 w-72">
+                                    <div className="absolute top-full mt-3 right-0 bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl border border-white p-6 z-50 w-72">
                                         <div className="flex items-center justify-between py-4 border-b border-slate-100">
                                             <div>
-                                                <p className="text-sm font-semibold text-slate-700">Loại phòng</p>
+                                                <p className="text-sm font-bold text-slate-700">Loại phòng</p>
                                             </div>
                                             <div className="flex items-center gap-3">
                                                 <button
@@ -350,12 +344,12 @@ const HomePage = () => {
                                                             if (children > ROOM_CAPACITY[newType].children) setChildren(ROOM_CAPACITY[newType].children);
                                                         }
                                                     }}
-                                                    className="w-8 h-8 flex items-center justify-center rounded-full border border-slate-300 text-slate-500 hover:border-amber-500 hover:text-amber-500 transition-colors cursor-pointer disabled:opacity-30"
+                                                    className="w-8 h-8 flex items-center justify-center rounded-full border border-slate-300 text-slate-500 hover:border-teal-500 hover:text-teal-500 transition-colors cursor-pointer disabled:opacity-30"
                                                     disabled={ROOM_TYPES.indexOf(roomType) === 0}
                                                 >
                                                     <ChevronLeft className="w-4 h-4" />
                                                 </button>
-                                                <span className="w-[60px] text-center text-sm font-semibold text-amber-600">{roomType}</span>
+                                                <span className="w-[60px] text-center text-sm font-bold text-teal-600 uppercase">{roomType}</span>
                                                 <button
                                                     onClick={() => {
                                                         const idx = ROOM_TYPES.indexOf(roomType);
@@ -366,7 +360,7 @@ const HomePage = () => {
                                                             if (children > ROOM_CAPACITY[newType].children) setChildren(ROOM_CAPACITY[newType].children);
                                                         }
                                                     }}
-                                                    className="w-8 h-8 flex items-center justify-center rounded-full border border-slate-300 text-slate-500 hover:border-amber-500 hover:text-amber-500 transition-colors cursor-pointer disabled:opacity-30"
+                                                    className="w-8 h-8 flex items-center justify-center rounded-full border border-slate-300 text-slate-500 hover:border-teal-500 hover:text-teal-500 transition-colors cursor-pointer disabled:opacity-30"
                                                     disabled={ROOM_TYPES.indexOf(roomType) === ROOM_TYPES.length - 1}
                                                 >
                                                     <ChevronRight className="w-4 h-4" />
@@ -379,21 +373,21 @@ const HomePage = () => {
                                         ].map((item) => (
                                             <div key={item.label} className="flex items-center justify-between py-4 border-b border-slate-100 last:border-0">
                                                 <div>
-                                                    <p className="text-sm font-semibold text-slate-700">{item.label}</p>
-                                                    {item.sub && <p className="text-xs text-slate-400">{item.sub}</p>}
+                                                    <p className="text-sm font-bold text-slate-700">{item.label}</p>
+                                                    {item.sub && <p className="text-xs font-semibold text-slate-400">{item.sub}</p>}
                                                 </div>
                                                 <div className="flex items-center gap-3">
                                                     <button
                                                         onClick={() => item.set(Math.max(item.min, item.value - 1))}
-                                                        className="w-8 h-8 flex items-center justify-center rounded-full border border-slate-300 text-slate-500 hover:border-amber-500 hover:text-amber-500 transition-colors cursor-pointer disabled:opacity-30"
+                                                        className="w-8 h-8 flex items-center justify-center rounded-full border border-slate-300 text-slate-500 hover:border-teal-500 hover:text-teal-500 transition-colors cursor-pointer disabled:opacity-30"
                                                         disabled={item.value <= item.min}
                                                     >
                                                         <Minus className="w-4 h-4" />
                                                     </button>
-                                                    <span className="w-6 text-center text-lg font-semibold text-amber-600">{item.value}</span>
+                                                    <span className="w-6 text-center text-lg font-bold text-teal-600">{item.value}</span>
                                                     <button
                                                         onClick={() => item.set(Math.min(item.max, item.value + 1))}
-                                                        className="w-8 h-8 flex items-center justify-center rounded-full border border-slate-300 text-slate-500 hover:border-amber-500 hover:text-amber-500 transition-colors cursor-pointer disabled:opacity-30"
+                                                        className="w-8 h-8 flex items-center justify-center rounded-full border border-slate-300 text-slate-500 hover:border-teal-500 hover:text-teal-500 transition-colors cursor-pointer disabled:opacity-30"
                                                         disabled={item.value >= item.max}
                                                     >
                                                         <Plus className="w-4 h-4" />

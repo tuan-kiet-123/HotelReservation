@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { NavLink, Outlet, useNavigate, useLocation } from 'react-router';
+import { NavLink, Outlet, useNavigate, useLocation, Navigate } from 'react-router';
+import { useAuth } from '../lib/auth';
 // Let's use lucide-react as used in HomePage
 import {
     LayoutDashboard as LayoutDashboardIcon,
@@ -25,11 +26,18 @@ const navItems = [
 ];
 
 const AdminLayout = () => {
+    const { currentUser, logout } = useAuth();
     const [isMobileOpen, setIsMobileOpen] = useState(false);
     const navigate = useNavigate();
     const location = useLocation();
 
+    // Bảo vệ Route Admin
+    if (!currentUser || currentUser.Role !== 'Admin') {
+        return <Navigate to="/admin/login" replace />;
+    }
+
     const handleLogout = () => {
+        logout();
         navigate('/');
     };
 
@@ -135,8 +143,8 @@ const AdminLayout = () => {
                                 <UserIcon className="w-4 h-4 text-slate-400" />
                             </div>
                             <div className="hidden sm:flex flex-col items-start">
-                                <span className="text-sm font-medium text-slate-200 leading-tight">Admin User</span>
-                                <span className="text-[10px] text-amber-500 font-semibold uppercase tracking-wider">Manager</span>
+                                <span className="text-sm font-medium text-slate-200 leading-tight">{currentUser.FullName}</span>
+                                <span className="text-[10px] text-amber-500 font-semibold uppercase tracking-wider">{currentUser.Role}</span>
                             </div>
                             <ChevronDown className="w-4 h-4 text-slate-500 ml-1 hidden sm:block" />
                         </button>

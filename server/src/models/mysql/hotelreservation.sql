@@ -175,6 +175,20 @@ CREATE INDEX `idx_Ledger_ReferenceId` ON `FinancialLedger` (`ReferenceId`);
 -- Index trên Status của Reservation: Tối ưu khi lọc các phòng đang 'Pending' hoặc 'Completed'
 CREATE INDEX `idx_Reservation_Status` ON `Reservation` (`Status`);
 
+-- --------------------------------------------------------
+-- Cấu trúc bảng cho bảng `User`
+-- --------------------------------------------------------
+CREATE TABLE `User` (
+  `UserId` varchar(10) NOT NULL Primary Key,
+  `FullName` varchar(255) NOT NULL,
+  `Email` varchar(255) NOT NULL UNIQUE,
+  `Password` varchar(255) NOT NULL,
+  `Role` varchar(50) DEFAULT 'Customer'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT INTO `User` (`UserId`, `FullName`, `Email`, `Password`, `Role`) VALUES 
+('US00000001', 'Nguyen Van A', 'demo1@davinci.com', '123456', 'Customer'),
+('US00000002', 'Le Thi B', 'demo2@davinci.com', '123456', 'Customer'),
+('US00000003', 'Tran Van C', 'demo3@davinci.com', '123456', 'Customer');
 
 COMMIT;
-

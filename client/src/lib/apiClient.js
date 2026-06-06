@@ -12,6 +12,24 @@ const apiClient = axios.create({
     },
 });
 
+// Request Interceptor: Đính kèm JWT Token vào Header nếu có
+apiClient.interceptors.request.use((config) => {
+    try {
+        const raw = localStorage.getItem('current_user');
+        if (raw) {
+            const user = JSON.parse(raw);
+            if (user?.token) {
+                config.headers.Authorization = `Bearer ${user.token}`;
+            }
+        }
+    } catch (e) {
+        console.error("Lỗi parse token", e);
+    }
+    return config;
+}, (error) => {
+    return Promise.reject(error);
+});
+
 // Response Interceptor: Catch all errors globally and fire a Toast
 apiClient.interceptors.response.use(
     (response) => response,

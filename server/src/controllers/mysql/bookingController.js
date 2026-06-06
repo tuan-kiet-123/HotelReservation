@@ -184,11 +184,38 @@ async function cancelReservation(req, res, next) {
   }
 }
 
+async function webhookPayment(req, res, next) {
+  try {
+    const { paymentId } = req.body;
+
+    if (!paymentId) {
+      return fail(res, "paymentId is required for webhook", 400);
+    }
+
+    const result = await bookingService.processPaymentWebhook({ paymentId });
+
+    if (result.statusCode >= 400) {
+      return fail(res, result.message, result.statusCode, result.data);
+    }
+
+    // Gửi tín hiệu Realtime qua Socket.IO
+    const io = req.app.get("io");
+    if (io) {
+      io.emit("payment_success", { paymentId });
+    }
+
+    return success(res, result.data, result.message, result.statusCode);
+  } catch (error) {
+    return next(error);
+  }
+}
+
 module.exports = {
   bookRoom,
   processCheckInPayment,
   processCheckOut,
   getAdminBookings,
   cancelReservation,
-  getReservations
+  getReservations,
+  webhookPayment
 };

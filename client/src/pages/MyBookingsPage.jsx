@@ -2,6 +2,7 @@ import React, { useMemo, useState, useEffect } from "react";
 import { Link } from "react-router";
 import { CalendarDays, ClipboardCheck, CircleDollarSign, LoaderCircle, LogIn, LogOut, MessageSquareHeart, OctagonX, ReceiptText } from "lucide-react";
 import { toast } from "sonner";
+import { io } from "socket.io-client";
 import SiteShell from "../components/SiteShell";
 import ReviewFormOverlay from "../components/ReviewFormOverlay";
 import { cancelReservation, createReview, fetchHotels, fetchReservations, processCheckInPayment, processCheckOut } from "../lib/api";
@@ -21,13 +22,13 @@ function formatVnd(value) {
 
 function getStatusMeta(status) {
     const map = {
-        Confirmed: "bg-sky-100 text-sky-700",
-        CheckedIn: "bg-amber-100 text-amber-700",
-        Completed: "bg-emerald-100 text-emerald-700",
-        Cancelled: "bg-rose-100 text-rose-700"
+        Confirmed: "bg-sky-100 text-sky-700 border border-sky-200",
+        CheckedIn: "bg-[#2EC4B6]/10 text-[#2EC4B6] border border-[#2EC4B6]/20",
+        Completed: "bg-emerald-100 text-emerald-700 border border-emerald-200",
+        Cancelled: "bg-rose-100 text-rose-700 border border-rose-200"
     };
 
-    return map[status] || "bg-slate-100 text-slate-700";
+    return map[status] || "bg-slate-100 text-slate-700 border border-slate-200";
 }
 
 function calculateRefundPreview(booking) {
@@ -175,6 +176,23 @@ export default function MyBookingsPage() {
         loadBookings(currentUser.UserId);
     }, [currentUser, hotelMetaMap]);
 
+    useEffect(() => {
+        const socketUrl = import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
+        const socket = io(socketUrl);
+
+        socket.on("payment_success", (data) => {
+            if (currentUser?.UserId) {
+                // Tải lại toàn bộ dữ liệu đơn hàng nếu có thông báo thanh toán thành công
+                toast.success(`Hệ thống ghi nhận thanh toán thành công (Mã GD: ${data.paymentId}). Đang cập nhật dữ liệu...`);
+                loadBookings(currentUser.UserId);
+            }
+        });
+
+        return () => {
+            socket.disconnect();
+        };
+    }, [currentUser]);
+
     async function handleCheckIn(reservationId) {
         setWorkingReservation(reservationId);
         try {
@@ -276,176 +294,184 @@ export default function MyBookingsPage() {
 
     return (
         <SiteShell>
-            <section className="relative overflow-hidden min-h-[calc(100vh-4rem)] bg-slate-100">
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(245,158,11,0.2),_rgba(255,255,255,0))]" />
+            <section className="relative overflow-hidden min-h-[calc(100vh-4rem)] bg-slate-50">
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(46,196,182,0.15),_rgba(255,255,255,0))]" />
                 <div className="max-w-6xl mx-auto px-4 py-10 relative">
-                    <div className="mb-6">
-                        <p className="text-s uppercase tracking-[0.2em] text-amber-600 font-semibold">Booking Management</p>
-                        <h1 className="text-3xl font-bold text-slate-900 mt-2">Đơn đặt phòng của tôi</h1>
-                        <p className="text-slate-600 mt-2">Theo dõi trạng thái Confirmed → CheckedIn → Completed, và mở modal review 1.6 khi hoàn tất.</p>
+                    <div className="mb-8">
+                        <p className="text-sm uppercase tracking-[0.2em] text-[#2EC4B6] font-bold">Quản lý đặt phòng</p>
+                        <h1 className="text-4xl font-black text-slate-800 mt-2">Đơn đặt phòng của tôi</h1>
+                        <p className="text-slate-500 font-medium mt-2">Theo dõi, cập nhật và quản lý các chuyến đi của bạn dễ dàng.</p>
                     </div>
 
-                    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                        <div className="rounded-2xl bg-white border border-slate-200 p-4 shadow-sm">
-                            <p className="text-xs text-slate-500 uppercase">Tổng đơn</p>
-                            <p className="mt-1 text-2xl font-bold text-slate-900">{summary.total}</p>
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+                        <div className="rounded-3xl bg-white border border-slate-100 p-6 shadow-xl">
+                            <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">Tổng số đơn</p>
+                            <p className="mt-2 text-3xl font-black text-slate-800">{summary.total}</p>
                         </div>
-                        <div className="rounded-2xl bg-white border border-slate-200 p-4 shadow-sm">
-                            <p className="text-xs text-slate-500 uppercase">Confirmed</p>
-                            <p className="mt-1 text-2xl font-bold text-sky-700">{summary.confirmed}</p>
+                        <div className="rounded-3xl bg-white border border-slate-100 p-6 shadow-xl">
+                            <p className="text-xs text-sky-500 font-bold uppercase tracking-wider">Chờ Check-in</p>
+                            <p className="mt-2 text-3xl font-black text-sky-600">{summary.confirmed}</p>
                         </div>
-                        <div className="rounded-2xl bg-white border border-slate-200 p-4 shadow-sm">
-                            <p className="text-xs text-slate-500 uppercase">CheckedIn</p>
-                            <p className="mt-1 text-2xl font-bold text-amber-700">{summary.checkedIn}</p>
+                        <div className="rounded-3xl bg-white border border-slate-100 p-6 shadow-xl">
+                            <p className="text-xs text-[#2EC4B6] font-bold uppercase tracking-wider">Đang lưu trú</p>
+                            <p className="mt-2 text-3xl font-black text-[#2EC4B6]">{summary.checkedIn}</p>
                         </div>
-                        <div className="rounded-2xl bg-white border border-slate-200 p-4 shadow-sm">
-                            <p className="text-xs text-slate-500 uppercase">Completed</p>
-                            <p className="mt-1 text-2xl font-bold text-emerald-700">{summary.completed}</p>
+                        <div className="rounded-3xl bg-white border border-slate-100 p-6 shadow-xl">
+                            <p className="text-xs text-emerald-500 font-bold uppercase tracking-wider">Hoàn tất</p>
+                            <p className="mt-2 text-3xl font-black text-emerald-600">{summary.completed}</p>
                         </div>
                     </div>
 
-                    {bookings.length === 0 && (
-                        <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-8 text-center shadow-sm">
-                            <ReceiptText className="w-10 h-10 mx-auto text-slate-400" />
-                            <h2 className="mt-3 text-xl font-semibold text-slate-800">Bạn chưa có đơn đặt phòng nào</h2>
-                            <p className="mt-2 text-sm text-slate-500">Chọn user demo để xem các đơn từ DB, sau đó test check-in/check-out/review.</p>
+                    {!currentUser ? (
+                        <div className="rounded-3xl border border-dashed border-[#2EC4B6]/30 bg-white p-12 text-center shadow-xl">
+                            <div className="w-20 h-20 bg-[#2EC4B6]/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <LogIn className="w-10 h-10 text-[#2EC4B6]" />
+                            </div>
+                            <h2 className="mt-4 text-2xl font-black text-slate-800">Vui lòng đăng nhập</h2>
+                            <p className="mt-2 text-slate-500 font-medium">Bạn cần đăng nhập để xem danh sách các đơn đặt phòng của mình.</p>
+                        </div>
+                    ) : bookings.length === 0 ? (
+                        <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-12 text-center shadow-xl">
+                            <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <ReceiptText className="w-10 h-10 text-slate-300" />
+                            </div>
+                            <h2 className="mt-4 text-2xl font-black text-slate-800">Bạn chưa có đơn đặt phòng nào</h2>
+                            <p className="mt-2 text-slate-500 font-medium">Hãy tìm kiếm và đặt ngay một chuyến đi tuyệt vời.</p>
                             <Link
-                                to="/hotels/69ca837d9a90b3531e860c22"
-                                className="inline-flex mt-5 px-5 py-2.5 rounded-xl bg-slate-900 text-white font-medium"
+                                to="/"
+                                className="inline-flex mt-6 px-8 py-3.5 rounded-xl bg-[#FF6F61] hover:bg-[#FF5A4A] shadow-lg shadow-[#FF6F61]/30 transition-all text-white font-bold"
                             >
-                                Đi tới trang chi tiết khách sạn
+                                Bắt đầu tìm kiếm
                             </Link>
                         </div>
-                    )}
-
-                    <div className="space-y-4">
-                        {bookings.map((booking) => (
-                            <article key={booking.reservationId} className="rounded-3xl bg-white border border-slate-200 p-5 shadow-md">
-                                <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-                                    <div className="space-y-3">
-                                        <div className="flex items-center gap-3 flex-wrap">
-                                            <h3 className="text-lg font-bold text-slate-900">{booking.hotelName || "DaVinci Resort"}</h3>
-                                            <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${getStatusMeta(booking.status)}`}>
-                                                {booking.status}
-                                            </span>
-                                        </div>
-
-                                        <div className="grid sm:grid-cols-2 gap-x-8 gap-y-2 text-sm text-slate-600">
-                                            <p><span className="font-medium text-slate-700">Mã đơn:</span> {booking.reservationId || "-"}</p>
-                                            <p><span className="font-medium text-slate-700">Khách hàng:</span> {booking.userFullName || booking.userId || "-"}</p>
-                                            <p><span className="font-medium text-slate-700">Phòng:</span> {booking.roomLabel || booking.roomId}</p>
-                                            <p className="flex items-center gap-1"><CalendarDays className="w-4 h-4 text-amber-500" /> {formatDateTime(booking.checkInDate)}</p>
-                                            <p className="flex items-center gap-1"><CalendarDays className="w-4 h-4 text-amber-500" /> {formatDateTime(booking.checkOutDate)}</p>
-                                            <p><span className="font-medium text-slate-700">Đã thanh toán:</span> {formatVnd(booking.amountPaid)}</p>
-                                            <p><span className="font-medium text-slate-700">Tổng đơn:</span> {formatVnd(booking.totalAmount)}</p>
-                                        </div>
-
-                                        {booking.status === "Cancelled" && (
-                                            <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-                                                <p>{booking.refundRule || "Đã hủy"}</p>
-                                                <p>Hoàn: {formatVnd(booking.refundAmount || 0)} | Phí phạt: {formatVnd(booking.penaltyAmount || 0)}</p>
+                    ) : (
+                        <div className="space-y-6">
+                            {bookings.map((booking) => (
+                                <article key={booking.reservationId} className="rounded-3xl bg-white border border-slate-100 p-6 shadow-xl hover:shadow-2xl transition-all duration-300">
+                                    <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+                                        <div className="space-y-4 flex-1">
+                                            <div className="flex items-center gap-3 flex-wrap">
+                                                <h3 className="text-xl font-black text-slate-800">{booking.hotelName || "DaVinci Resort"}</h3>
+                                                <span className={`px-3 py-1 rounded-full text-xs font-bold ${getStatusMeta(booking.status)}`}>
+                                                    {booking.status}
+                                                </span>
                                             </div>
-                                        )}
-                                    </div>
 
-                                    <div className="flex flex-wrap gap-2 lg:justify-end">
-                                        {booking.status === "Confirmed" && (
-                                            <div className="relative group">
+                                            <div className="grid sm:grid-cols-2 gap-x-8 gap-y-3 text-sm text-slate-600 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                                                <p><span className="font-bold text-slate-700">Mã đơn:</span> <span className="font-medium text-slate-500">{booking.reservationId || "-"}</span></p>
+                                                <p><span className="font-bold text-slate-700">Khách hàng:</span> <span className="font-medium text-slate-500">{booking.userFullName || booking.userId || "-"}</span></p>
+                                                <p><span className="font-bold text-slate-700">Phòng:</span> <span className="font-medium text-slate-500">{booking.roomLabel || booking.roomId}</span></p>
+                                                <p><span className="font-bold text-slate-700">Tổng đơn:</span> <span className="font-black text-[#FF6F61]">{formatVnd(booking.totalAmount)}</span></p>
+                                                <p className="flex items-center gap-1.5 font-medium"><CalendarDays className="w-4 h-4 text-[#2EC4B6]" /> {formatDateTime(booking.checkInDate)}</p>
+                                                <p className="flex items-center gap-1.5 font-medium"><CalendarDays className="w-4 h-4 text-[#FF6F61]" /> {formatDateTime(booking.checkOutDate)}</p>
+                                            </div>
+
+                                            {booking.status === "Cancelled" && (
+                                                <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                                                    <p className="font-bold">{booking.refundRule || "Đã hủy"}</p>
+                                                    <p className="mt-1 font-medium">Hoàn: {formatVnd(booking.refundAmount || 0)} | Phí phạt: {formatVnd(booking.penaltyAmount || 0)}</p>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="flex flex-wrap gap-3 lg:flex-col lg:justify-start lg:w-48 shrink-0">
+                                            {booking.status === "Confirmed" && (
+                                                <div className="relative group w-full">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleCheckIn(booking.reservationId)}
+                                                        disabled={workingReservation === booking.reservationId || !canCheckIn(booking.checkInDate)}
+                                                        className="w-full px-5 py-3 rounded-xl bg-[#2EC4B6] hover:bg-[#1DA69A] text-white text-sm font-bold shadow-lg shadow-[#2EC4B6]/30 inline-flex justify-center items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                                                    >
+                                                        {workingReservation === booking.reservationId ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <LogIn className="w-4 h-4" />}
+                                                        Check-in ngay
+                                                    </button>
+                                                    {!canCheckIn(booking.checkInDate) && (
+                                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-10 whitespace-nowrap bg-slate-800 text-white text-xs px-3 py-1.5 rounded-lg font-medium shadow-lg">
+                                                            {getCheckInBlockMessage(booking.checkInDate)}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {booking.status === "CheckedIn" && (
                                                 <button
                                                     type="button"
-                                                    onClick={() => handleCheckIn(booking.reservationId)}
-                                                    disabled={workingReservation === booking.reservationId || !canCheckIn(booking.checkInDate)}
-                                                    className="px-4 py-2 rounded-xl bg-amber-500 text-white text-sm font-semibold inline-flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
-                                                    title={!canCheckIn(booking.checkInDate) ? getCheckInBlockMessage(booking.checkInDate) : ""}
+                                                    onClick={() => handleCheckOut(booking.reservationId)}
+                                                    disabled={workingReservation === booking.reservationId}
+                                                    className="w-full px-5 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold shadow-lg shadow-emerald-500/30 inline-flex justify-center items-center gap-2 disabled:opacity-60 transition-colors"
                                                 >
-                                                    {workingReservation === booking.reservationId ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <LogIn className="w-4 h-4" />}
-                                                    Check-in
+                                                    {workingReservation === booking.reservationId ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <LogOut className="w-4 h-4" />}
+                                                    Check-out
                                                 </button>
-                                                {!canCheckIn(booking.checkInDate) && (
-                                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-10 whitespace-nowrap bg-slate-900 text-white text-xs px-2 py-1 rounded">
-                                                        {getCheckInBlockMessage(booking.checkInDate)}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )}
+                                            )}
 
-                                        {booking.status === "CheckedIn" && (
-                                            <button
-                                                type="button"
-                                                onClick={() => handleCheckOut(booking.reservationId)}
-                                                disabled={workingReservation === booking.reservationId}
-                                                className="px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-semibold inline-flex items-center gap-2 disabled:opacity-60"
-                                            >
-                                                {workingReservation === booking.reservationId ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <LogOut className="w-4 h-4" />}
-                                                Check-out
-                                            </button>
-                                        )}
+                                            {(booking.status === "Confirmed" || booking.status === "CheckedIn") && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setCancelTarget(booking)}
+                                                    className="w-full px-5 py-3 rounded-xl border-2 border-rose-100 hover:border-rose-200 hover:bg-rose-50 text-rose-600 text-sm font-bold inline-flex justify-center items-center gap-2 transition-colors"
+                                                >
+                                                    <OctagonX className="w-4 h-4" />
+                                                    Hủy đơn
+                                                </button>
+                                            )}
 
-                                        {(booking.status === "Confirmed" || booking.status === "CheckedIn") && (
-                                            <button
-                                                type="button"
-                                                onClick={() => setCancelTarget(booking)}
-                                                className="px-4 py-2 rounded-xl border border-rose-300 text-rose-600 text-sm font-semibold inline-flex items-center gap-2"
-                                            >
-                                                <OctagonX className="w-4 h-4" />
-                                                Hủy đơn
-                                            </button>
-                                        )}
+                                            {booking.status === "Completed" && !booking.reviewSubmitted && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setReviewTarget(booking)}
+                                                    className="w-full px-5 py-3 rounded-xl bg-[#FF6F61] hover:bg-[#FF5A4A] text-white text-sm font-bold shadow-lg shadow-[#FF6F61]/30 inline-flex justify-center items-center gap-2 transition-colors"
+                                                >
+                                                    <MessageSquareHeart className="w-4 h-4" />
+                                                    Đánh giá ngay
+                                                </button>
+                                            )}
 
-                                        {booking.status === "Completed" && !booking.reviewSubmitted && (
-                                            <button
-                                                type="button"
-                                                onClick={() => setReviewTarget(booking)}
-                                                className="px-4 py-2 rounded-xl bg-slate-900 text-white text-sm font-semibold inline-flex items-center gap-2"
-                                            >
-                                                <MessageSquareHeart className="w-4 h-4" />
-                                                Đánh giá
-                                            </button>
-                                        )}
-
-                                        {booking.reviewSubmitted && (
-                                            <span className="px-3 py-2 rounded-xl bg-emerald-100 text-emerald-700 text-sm font-semibold inline-flex items-center gap-2">
-                                                <ClipboardCheck className="w-4 h-4" /> Đã đánh giá
-                                            </span>
-                                        )}
+                                            {booking.reviewSubmitted && (
+                                                <div className="w-full px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-600 text-sm font-bold inline-flex justify-center items-center gap-2">
+                                                    <ClipboardCheck className="w-4 h-4" /> Đã đánh giá
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
-                                </div>
-                            </article>
-                        ))}
-                    </div>
+                                </article>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 {cancelTarget && (
-                    <div className="fixed inset-0 z-[60] bg-slate-950/65 backdrop-blur-sm flex items-center justify-center p-4">
-                        <div className="w-full max-w-md rounded-2xl bg-white border border-slate-200 shadow-xl p-6">
-                            <h3 className="text-lg font-semibold text-slate-900">Xác nhận hủy đơn</h3>
-                            <p className="text-sm text-slate-600 mt-2">Đơn đặt: ẩn (hiển thị trong thông báo)</p>
+                    <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+                        <div className="w-full max-w-md rounded-3xl bg-white border border-white shadow-2xl p-8 transform transition-all">
+                            <h3 className="text-xl font-black text-slate-800">Xác nhận hủy đơn</h3>
+                            <p className="text-sm font-medium text-slate-500 mt-2">Bạn có chắc chắn muốn huỷ chuyến đi này không?</p>
 
-                            <div className="mt-4 rounded-xl bg-amber-50 border border-amber-200 p-4 text-sm">
+                            <div className="mt-6 rounded-2xl bg-amber-50 border border-amber-200 p-5 text-sm">
                                 {(() => {
                                     const preview = calculateRefundPreview(cancelTarget);
                                     return (
                                         <>
-                                            <p className="font-semibold text-amber-800">{preview.label}</p>
-                                            <p className="mt-1 text-amber-700">Hoàn dự kiến: {formatVnd(preview.refund)}</p>
-                                            <p className="text-amber-700">Phí phạt dự kiến: {formatVnd(preview.penalty)}</p>
+                                            <p className="font-bold text-amber-800">{preview.label}</p>
+                                            <p className="mt-2 font-medium text-amber-700">Hoàn dự kiến: <span className="font-bold">{formatVnd(preview.refund)}</span></p>
+                                            <p className="mt-1 font-medium text-amber-700">Phí phạt dự kiến: <span className="font-bold">{formatVnd(preview.penalty)}</span></p>
                                         </>
                                     );
                                 })()}
                             </div>
 
-                            <div className="mt-5 flex justify-end gap-2">
+                            <div className="mt-8 flex flex-col sm:flex-row justify-end gap-3">
                                 <button
                                     type="button"
                                     onClick={() => setCancelTarget(null)}
-                                    className="px-4 py-2 rounded-xl border border-slate-300 text-slate-600"
+                                    className="px-6 py-3 rounded-xl border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 transition-colors"
                                 >
-                                    Đóng
+                                    Giữ lại đơn
                                 </button>
                                 <button
                                     type="button"
                                     onClick={handleConfirmCancel}
-                                    className="px-4 py-2 rounded-xl bg-rose-600 text-white inline-flex items-center gap-2"
+                                    className="px-6 py-3 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-bold shadow-lg shadow-rose-500/30 inline-flex justify-center items-center gap-2 transition-colors"
                                 >
                                     <CircleDollarSign className="w-4 h-4" /> Xác nhận hủy
                                 </button>
