@@ -1,0 +1,1071 @@
+-- phpMyAdmin SQL Dump
+-- version 5.2.1
+-- https://www.phpmyadmin.net/
+--
+-- Máy chủ: 127.0.0.1
+-- Thời gian đã tạo: Th6 09, 2026 lúc 09:04 PM
+-- Phiên bản máy phục vụ: 10.4.32-MariaDB
+-- Phiên bản PHP: 8.2.12
+
+SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
+
+START TRANSACTION;
+SET FOREIGN_KEY_CHECKS = 0;
+DROP TABLE IF EXISTS `financialledger`, `hotel`, `idsequence`, `payment`, `pricechangelog`, `refund`, `reservation`, `room`, `user`;
+SET FOREIGN_KEY_CHECKS = 1;
+
+SET time_zone = "+00:00";
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */
+;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */
+;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */
+;
+/*!40101 SET NAMES utf8mb4 */
+;
+
+--
+-- Cơ sở dữ liệu: `hotelreservation`
+--
+
+DELIMITER $$
+--
+-- Thủ tục
+--
+DROP PROCEDURE IF EXISTS `sp_BookRoom`$$
+DROP PROCEDURE IF EXISTS `sp_CancelReservation`$$
+DROP PROCEDURE IF EXISTS `sp_ConfirmBookingWebhook`$$
+DROP PROCEDURE IF EXISTS `SP_Generate_QuarterlyADRRevPAR`$$
+DROP PROCEDURE IF EXISTS `SP_Generate_QuarterlyRefundRatio`$$
+DROP PROCEDURE IF EXISTS `SP_Generate_QuarterlyTop3Rooms`$$
+DROP PROCEDURE IF EXISTS `sp_ProcessCheckIn`$$
+DROP PROCEDURE IF EXISTS `sp_ProcessCheckOut`$$
+DROP PROCEDURE IF EXISTS `sp_SearchAvailableRooms`$$
+DROP FUNCTION IF EXISTS `fn_CheckRoomAvailability`$$
+
+CREATE  PROCEDURE `sp_BookRoom` (IN `p_RoomId` VARCHAR(255), IN `p_UserId` VARCHAR(255), IN `p_CheckInDate` DATETIME, IN `p_CheckOutDate` DATETIME)   BEGIN
+    DECLARE v_RoomStatus TINYINT;
+    DECLARE v_CurrentPrice DECIMAL(18,2);
+    DECLARE v_OverlapCount INT;
+    DECLARE v_TotalPrice DECIMAL(18,2);
+    DECLARE v_DaysUntilCheckIn INT;
+    DECLARE v_AmountToPay DECIMAL(18,2);
+    DECLARE v_PaymentType VARCHAR(50);
+    DECLARE v_ReservationId VARCHAR(10);
+    DECLARE v_PaymentId VARCHAR(10);
+    DECLARE v_ReservationSeq BIGINT;
+    DECLARE v_PaymentSeq BIGINT;
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        SELECT 'HTTP 500: Lỗi hệ thống. Đã hủy giao dịch.' AS Message;
+    END;
+
+    IF DATE(p_CheckInDate) < CURDATE() OR DATE(p_CheckOutDate) <= DATE(p_CheckInDate) THEN
+        SELECT 'HTTP 400: Ngày nhận/trả phòng không hợp lệ.' AS Message;
+    ELSE
+        START TRANSACTION;
+
+        SELECT LastNumber INTO v_ReservationSeq FROM IdSequence WHERE SequenceName = 'Reservation' FOR UPDATE;
+        SET v_ReservationSeq = v_ReservationSeq + 1;
+        UPDATE IdSequence SET LastNumber = v_ReservationSeq WHERE SequenceName = 'Reservation';
+        SET v_ReservationId = CONCAT('RSV', LPAD(v_ReservationSeq, 7, '0'));
+
+        SELECT LastNumber INTO v_PaymentSeq FROM IdSequence WHERE SequenceName = 'Payment' FOR UPDATE;
+        SET v_PaymentSeq = v_PaymentSeq + 1;
+        UPDATE IdSequence SET LastNumber = v_PaymentSeq WHERE SequenceName = 'Payment';
+        SET v_PaymentId = CONCAT('PMT', LPAD(v_PaymentSeq, 7, '0'));
+
+        SELECT Status, CurrentPrice INTO v_RoomStatus, v_CurrentPrice
+        FROM Room WHERE RoomId = p_RoomId COLLATE utf8mb4_general_ci FOR UPDATE;
+
+        IF v_RoomStatus IS NULL THEN
+            ROLLBACK;
+            SELECT 'HTTP 404: Không tìm thấy phòng.' AS Message;
+        ELSEIF v_RoomStatus = 0 THEN
+            ROLLBACK;
+            SELECT 'HTTP 403: Phòng đang bảo trì.' AS Message;
+        ELSE
+            -- Giờ đã check thêm cả phòng ở trạng thái 'Pending' để tránh xung đột
+            SELECT COUNT(*) INTO v_OverlapCount
+            FROM Reservation
+            WHERE RoomId = p_RoomId COLLATE utf8mb4_general_ci
+              AND Status IN ('Confirmed', 'CheckedIn', 'Pending')
+              AND (p_CheckInDate < CheckOutDate AND p_CheckOutDate > CheckInDate);
+
+            IF v_OverlapCount > 0 THEN
+                ROLLBACK;
+                SELECT 'HTTP 409: Phòng đã có người đặt trong khoảng thời gian này.' AS Message;
+            ELSE
+                SET v_TotalPrice = v_CurrentPrice * DATEDIFF(p_CheckOutDate, p_CheckInDate);
+                SET v_DaysUntilCheckIn = DATEDIFF(p_CheckInDate, CURDATE());
+
+                IF v_DaysUntilCheckIn >= 7 THEN
+                    SET v_AmountToPay = v_TotalPrice * 0.3;
+                    SET v_PaymentType = 'Deposit';
+                ELSE
+                    SET v_AmountToPay = v_TotalPrice;
+                    SET v_PaymentType = 'FullPayment';
+                END IF;
+
+                -- Lưu Hóa đơn và Đặt phòng vào trạng thái chờ thanh toán (Pending)
+                INSERT INTO Reservation (ReservationId, RoomId, UserId, CheckInDate, CheckOutDate, Status)
+                VALUES (v_ReservationId, p_RoomId, p_UserId, p_CheckInDate, p_CheckOutDate, 'Pending');
+
+                INSERT INTO Payment (PaymentId, ReservationId, PaymentType, Amount, PaymentDate, Status)
+                VALUES (v_PaymentId, v_ReservationId, v_PaymentType, v_AmountToPay, NOW(), 'Pending');
+
+                COMMIT;
+                SELECT 'HTTP 200: Tạo giao dịch chờ thanh toán thành công!' AS Message, v_ReservationId AS ReservationId, v_PaymentId AS PaymentId, v_PaymentType AS PaymentType, v_AmountToPay AS AmountPaid;
+            END IF;
+        END IF;
+    END IF;
+END$$
+
+CREATE  PROCEDURE `sp_CancelReservation` (IN `p_ReservationId` VARCHAR(255))   BEGIN
+		DECLARE v_CheckInDate DATETIME;
+		DECLARE v_TotalPaid DECIMAL(15,2);
+		DECLARE v_TotalAmount DECIMAL(15,2);
+		DECLARE v_DaysBefore INT;
+		DECLARE v_RefundAmount DECIMAL(15,2) DEFAULT 0;
+		DECLARE v_PenaltyAmount DECIMAL(15,2) DEFAULT 0;
+		DECLARE v_RoomId VARCHAR(255);
+		DECLARE v_RefundId VARCHAR(10);
+
+		SELECT CheckInDate, RoomId INTO v_CheckInDate, v_RoomId
+		FROM Reservation
+		WHERE ReservationId = CONVERT(p_ReservationId USING utf8mb4) COLLATE utf8mb4_general_ci;
+
+		SELECT SUM(Amount) INTO v_TotalPaid 
+		FROM Payment 
+		WHERE ReservationId = CONVERT(p_ReservationId USING utf8mb4) COLLATE utf8mb4_general_ci
+			AND Status = 'Completed';
+
+		SET v_DaysBefore = DATEDIFF(v_CheckInDate, NOW());
+
+		SELECT CurrentPrice * DATEDIFF(r.CheckOutDate, r.CheckInDate) INTO v_TotalAmount 
+		FROM Room rm 
+		INNER JOIN Reservation r ON r.RoomId = rm.RoomId
+		WHERE r.ReservationId = CONVERT(p_ReservationId USING utf8mb4) COLLATE utf8mb4_general_ci;
+
+		IF v_DaysBefore >= 30 THEN
+				SET v_RefundAmount = v_TotalPaid;
+				SET v_PenaltyAmount = 0;
+		ELSEIF v_DaysBefore >= 7 AND v_DaysBefore < 30 THEN
+				SET v_PenaltyAmount = v_TotalAmount * 0.3;
+				SET v_RefundAmount = GREATEST(0, v_TotalPaid - v_PenaltyAmount);
+		ELSE
+				SET v_PenaltyAmount = v_TotalPaid;
+				SET v_RefundAmount = 0;
+		END IF;
+
+		START TRANSACTION;
+				UPDATE Reservation SET Status = 'Cancelled' WHERE ReservationId = CONVERT(p_ReservationId USING utf8mb4) COLLATE utf8mb4_general_ci;
+				UPDATE Room SET Status = 1 WHERE RoomId = v_RoomId;
+
+				IF v_TotalPaid > 0 THEN
+						SET v_RefundId = SUBSTRING(REPLACE(UUID(), '-', ''), 1, 10);
+						INSERT INTO Refund (RefundId, ReservationId, RefundAmount, PenaltyAmount, ProcessedAt)
+						VALUES (v_RefundId, CONVERT(p_ReservationId USING utf8mb4) COLLATE utf8mb4_general_ci, v_RefundAmount, v_PenaltyAmount, NOW());
+				END IF;
+		COMMIT;
+END$$
+
+CREATE  PROCEDURE `sp_ConfirmBookingWebhook` (IN `p_PaymentId` VARCHAR(255))   BEGIN
+    DECLARE v_ReservationId VARCHAR(10);
+    
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        SELECT 'HTTP 500: Lỗi hệ thống Webhook.' AS Message;
+    END;
+
+    START TRANSACTION;
+    
+    -- Lấy mã ReservationId tương ứng với Hóa đơn thanh toán
+    SELECT ReservationId INTO v_ReservationId FROM Payment WHERE PaymentId = p_PaymentId;
+    
+    IF v_ReservationId IS NULL THEN
+        ROLLBACK;
+        SELECT 'HTTP 404: Không tìm thấy giao dịch thanh toán.' AS Message;
+    ELSE
+        -- Kích hoạt Status thành Completed / Confirmed
+        UPDATE Payment SET Status = 'Completed', PaymentDate = NOW() WHERE PaymentId = p_PaymentId;
+        UPDATE Reservation SET Status = 'Confirmed' WHERE ReservationId = v_ReservationId;
+        COMMIT;
+        
+        SELECT 'HTTP 200: Xác nhận thanh toán thành công, đơn hàng đã Confirm!' AS Message;
+    END IF;
+END$$
+
+CREATE  PROCEDURE `SP_Generate_QuarterlyADRRevPAR` (IN `p_year` INT, IN `p_quarter` TINYINT)   BEGIN
+	DECLARE v_quarter_start DATE;
+	DECLARE v_quarter_end DATE;
+	DECLARE v_days_in_quarter INT;
+
+	SET v_quarter_start = DATE_ADD(MAKEDATE(p_year, 1), INTERVAL (p_quarter - 1) * 3 MONTH);
+	SET v_quarter_end = DATE_ADD(v_quarter_start, INTERVAL 3 MONTH);
+	SET v_days_in_quarter = DATEDIFF(v_quarter_end, v_quarter_start);
+
+	DROP TEMPORARY TABLE IF EXISTS tmp_mapped_ledger;
+	CREATE TEMPORARY TABLE tmp_mapped_ledger (
+		LedgerId VARCHAR(10) NOT NULL,
+		EventType VARCHAR(50),
+		DebitAmount DECIMAL(15, 2),
+		CreditAmount DECIMAL(15, 2),
+		Date DATETIME,
+		HotelId VARCHAR(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
+		RoomId VARCHAR(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
+		PRIMARY KEY (LedgerId)
+	);
+
+	INSERT INTO tmp_mapped_ledger
+	SELECT fl.LedgerId, fl.EventType, fl.DebitAmount, fl.CreditAmount, fl.Date, rm.HotelId, rs.RoomId
+	FROM FinancialLedger fl
+	INNER JOIN Payment p ON p.PaymentId = fl.ReferenceId
+	INNER JOIN Reservation rs ON rs.ReservationId = p.ReservationId
+	INNER JOIN Room rm ON rm.RoomId = rs.RoomId
+	WHERE YEAR(fl.Date) = p_year AND QUARTER(fl.Date) = p_quarter AND p.Status = 'Completed' AND fl.EventType IN ('Deposit', 'FinalPayment', 'FullPayment')
+	UNION ALL
+	SELECT fl.LedgerId, fl.EventType, fl.DebitAmount, fl.CreditAmount, fl.Date, rm.HotelId, rs.RoomId
+	FROM FinancialLedger fl
+	INNER JOIN Refund r ON r.RefundId = fl.ReferenceId
+	INNER JOIN Reservation rs ON rs.ReservationId = r.ReservationId
+	INNER JOIN Room rm ON rm.RoomId = rs.RoomId
+	WHERE YEAR(fl.Date) = p_year AND QUARTER(fl.Date) = p_quarter AND fl.EventType IN ('RefundPayout', 'PenaltyRevenue');
+
+	DROP TEMPORARY TABLE IF EXISTS tmp_hotel_totals;
+	CREATE TEMPORARY TABLE tmp_hotel_totals (
+		HotelId VARCHAR(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+		TotalRevenueIn DECIMAL(15, 2),
+		PRIMARY KEY (HotelId)
+	);
+
+	INSERT INTO tmp_hotel_totals
+	SELECT ml.HotelId, SUM(CASE WHEN ml.EventType IN ('Deposit', 'FinalPayment', 'FullPayment', 'PenaltyRevenue') THEN COALESCE(ml.DebitAmount, 0) ELSE 0 END) AS TotalRevenueIn
+	FROM tmp_mapped_ledger ml
+	GROUP BY ml.HotelId;
+
+	DROP TEMPORARY TABLE IF EXISTS tmp_room_nights;
+	CREATE TEMPORARY TABLE tmp_room_nights (
+		HotelId VARCHAR(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
+		RoomId VARCHAR(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
+		OccupiedRoomNights INT,
+		PRIMARY KEY (HotelId, RoomId)
+	);
+
+	INSERT INTO tmp_room_nights
+	SELECT rm.HotelId, rs.RoomId,
+		SUM(GREATEST(0, DATEDIFF(DATE(LEAST(rs.CheckOutDate, v_quarter_end)), DATE(GREATEST(rs.CheckInDate, v_quarter_start))))) AS OccupiedRoomNights
+	FROM Reservation rs
+	INNER JOIN Room rm ON rm.RoomId = rs.RoomId
+	WHERE rs.Status = 'Completed' AND rs.CheckOutDate > v_quarter_start AND rs.CheckInDate < v_quarter_end
+	GROUP BY rm.HotelId, rs.RoomId;
+
+	DROP TEMPORARY TABLE IF EXISTS tmp_room_nights_by_hotel;
+	CREATE TEMPORARY TABLE tmp_room_nights_by_hotel (
+		HotelId VARCHAR(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+		OccupiedRoomNights INT,
+		PRIMARY KEY (HotelId)
+	);
+
+	INSERT INTO tmp_room_nights_by_hotel
+	SELECT HotelId, SUM(OccupiedRoomNights) AS OccupiedRoomNights
+	FROM tmp_room_nights
+	GROUP BY HotelId;
+
+	DROP TEMPORARY TABLE IF EXISTS tmp_hotel_inventory;
+	CREATE TEMPORARY TABLE tmp_hotel_inventory (
+		HotelId VARCHAR(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+		TotalRooms INT,
+		AvailableRoomNights INT,
+		PRIMARY KEY (HotelId)
+	);
+
+	INSERT INTO tmp_hotel_inventory
+	SELECT r.HotelId, COALESCE(COUNT(r.RoomId), 0) AS TotalRooms, COALESCE(COUNT(r.RoomId), 0) * v_days_in_quarter AS AvailableRoomNights
+	FROM Room r
+	WHERE r.Status = 1
+	GROUP BY r.HotelId;
+
+	DROP TEMPORARY TABLE IF EXISTS tmp_hotel_ids;
+	CREATE TEMPORARY TABLE tmp_hotel_ids (
+		HotelId VARCHAR(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+		PRIMARY KEY (HotelId)
+	);
+
+	INSERT IGNORE INTO tmp_hotel_ids (HotelId)
+	SELECT HotelId FROM tmp_hotel_totals UNION SELECT HotelId FROM tmp_room_nights_by_hotel UNION SELECT HotelId FROM tmp_hotel_inventory;
+
+	SELECT h.HotelId, COALESCE(ht.TotalRevenueIn, 0) AS RoomRevenueForKPI, COALESCE(rn.OccupiedRoomNights, 0) AS OccupiedRoomNights,
+		COALESCE(inv.AvailableRoomNights, 0) AS AvailableRoomNights,
+		ROUND(COALESCE(rn.OccupiedRoomNights, 0) * 100 / NULLIF(COALESCE(inv.AvailableRoomNights, 0), 0), 2) AS OccupancyRate,
+		COALESCE(ht.TotalRevenueIn, 0) / NULLIF(COALESCE(rn.OccupiedRoomNights, 0), 0) AS ADR,
+		COALESCE(ht.TotalRevenueIn, 0) / NULLIF(COALESCE(inv.AvailableRoomNights, 0), 0) AS RevPAR
+	FROM tmp_hotel_ids h
+	LEFT JOIN tmp_hotel_totals ht ON ht.HotelId = h.HotelId
+	LEFT JOIN tmp_room_nights_by_hotel rn ON rn.HotelId = h.HotelId
+	LEFT JOIN tmp_hotel_inventory inv ON inv.HotelId = h.HotelId
+	ORDER BY h.HotelId;
+
+	DROP TEMPORARY TABLE IF EXISTS tmp_mapped_ledger;
+	DROP TEMPORARY TABLE IF EXISTS tmp_hotel_totals;
+	DROP TEMPORARY TABLE IF EXISTS tmp_room_nights;
+	DROP TEMPORARY TABLE IF EXISTS tmp_room_nights_by_hotel;
+	DROP TEMPORARY TABLE IF EXISTS tmp_hotel_inventory;
+	DROP TEMPORARY TABLE IF EXISTS tmp_hotel_ids;
+END$$
+
+CREATE  PROCEDURE `SP_Generate_QuarterlyRefundRatio` (IN `p_year` INT, IN `p_quarter` TINYINT)   BEGIN
+	DROP TEMPORARY TABLE IF EXISTS tmp_mapped_ledger;
+	CREATE TEMPORARY TABLE tmp_mapped_ledger (
+		LedgerId VARCHAR(10) NOT NULL,
+		EventType VARCHAR(50),
+		DebitAmount DECIMAL(15, 2),
+		CreditAmount DECIMAL(15, 2),
+		Date DATETIME,
+		HotelId VARCHAR(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
+		RoomId VARCHAR(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
+		PRIMARY KEY (LedgerId)
+	);
+
+	INSERT INTO tmp_mapped_ledger
+	SELECT fl.LedgerId, fl.EventType, fl.DebitAmount, fl.CreditAmount, fl.Date, rm.HotelId, rs.RoomId
+	FROM FinancialLedger fl
+	INNER JOIN Payment p ON p.PaymentId = fl.ReferenceId
+	INNER JOIN Reservation rs ON rs.ReservationId = p.ReservationId
+	INNER JOIN Room rm ON rm.RoomId = rs.RoomId
+	WHERE YEAR(fl.Date) = p_year AND QUARTER(fl.Date) = p_quarter AND p.Status = 'Completed' AND fl.EventType IN ('Deposit', 'FinalPayment', 'FullPayment')
+	UNION ALL
+	SELECT fl.LedgerId, fl.EventType, fl.DebitAmount, fl.CreditAmount, fl.Date, rm.HotelId, rs.RoomId
+	FROM FinancialLedger fl
+	INNER JOIN Refund r ON r.RefundId = fl.ReferenceId
+	INNER JOIN Reservation rs ON rs.ReservationId = r.ReservationId
+	INNER JOIN Room rm ON rm.RoomId = rs.RoomId
+	WHERE YEAR(fl.Date) = p_year AND QUARTER(fl.Date) = p_quarter AND fl.EventType IN ('RefundPayout', 'PenaltyRevenue');
+
+	DROP TEMPORARY TABLE IF EXISTS tmp_hotel_totals;
+	CREATE TEMPORARY TABLE tmp_hotel_totals (
+		HotelId VARCHAR(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+		TotalRevenueIn DECIMAL(15, 2),
+		TotalRefundPayout DECIMAL(15, 2),
+		PRIMARY KEY (HotelId)
+	);
+
+	INSERT INTO tmp_hotel_totals
+	SELECT ml.HotelId,
+		SUM(CASE WHEN ml.EventType IN ('Deposit', 'FinalPayment', 'FullPayment', 'PenaltyRevenue') THEN COALESCE(ml.DebitAmount, 0) ELSE 0 END) AS TotalRevenueIn,
+		SUM(CASE WHEN ml.EventType = 'RefundPayout' THEN COALESCE(ml.CreditAmount, 0) ELSE 0 END) AS TotalRefundPayout
+	FROM tmp_mapped_ledger ml
+	GROUP BY ml.HotelId;
+
+	SELECT ht.HotelId, COALESCE(ht.TotalRevenueIn, 0) AS TotalRevenueIn, COALESCE(ht.TotalRefundPayout, 0) AS TotalRefundPayout,
+		ROUND(COALESCE(ht.TotalRefundPayout, 0) * 100 / NULLIF(COALESCE(ht.TotalRevenueIn, 0), 0), 2) AS RefundToRevenueRatio
+	FROM tmp_hotel_totals ht
+	ORDER BY ht.HotelId;
+
+	DROP TEMPORARY TABLE IF EXISTS tmp_mapped_ledger;
+	DROP TEMPORARY TABLE IF EXISTS tmp_hotel_totals;
+END$$
+
+CREATE  PROCEDURE `SP_Generate_QuarterlyTop3Rooms` (IN `p_year` INT, IN `p_quarter` TINYINT)   BEGIN
+	DROP TEMPORARY TABLE IF EXISTS tmp_mapped_ledger;
+	CREATE TEMPORARY TABLE tmp_mapped_ledger (
+		LedgerId VARCHAR(10) NOT NULL,
+		EventType VARCHAR(50),
+		DebitAmount DECIMAL(15, 2),
+		CreditAmount DECIMAL(15, 2),
+		Date DATETIME,
+		HotelId VARCHAR(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
+		RoomId VARCHAR(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
+		PRIMARY KEY (LedgerId)
+	);
+
+	INSERT INTO tmp_mapped_ledger
+	SELECT
+		fl.LedgerId, fl.EventType, fl.DebitAmount, fl.CreditAmount, fl.Date, rm.HotelId, rs.RoomId
+	FROM FinancialLedger fl
+	INNER JOIN Payment p ON p.PaymentId = fl.ReferenceId
+	INNER JOIN Reservation rs ON rs.ReservationId = p.ReservationId
+	INNER JOIN Room rm ON rm.RoomId = rs.RoomId
+	WHERE YEAR(fl.Date) = p_year AND QUARTER(fl.Date) = p_quarter AND p.Status = 'Completed' AND fl.EventType IN ('Deposit', 'FinalPayment', 'FullPayment')
+	UNION ALL
+	SELECT
+		fl.LedgerId, fl.EventType, fl.DebitAmount, fl.CreditAmount, fl.Date, rm.HotelId, rs.RoomId
+	FROM FinancialLedger fl
+	INNER JOIN Refund r ON r.RefundId = fl.ReferenceId
+	INNER JOIN Reservation rs ON rs.ReservationId = r.ReservationId
+	INNER JOIN Room rm ON rm.RoomId = rs.RoomId
+	WHERE YEAR(fl.Date) = p_year AND QUARTER(fl.Date) = p_quarter AND fl.EventType IN ('RefundPayout', 'PenaltyRevenue');
+
+	DROP TEMPORARY TABLE IF EXISTS tmp_room_revenue;
+	CREATE TEMPORARY TABLE tmp_room_revenue (
+		HotelId VARCHAR(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
+		RoomId VARCHAR(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
+		NetRevenue DECIMAL(15, 2),
+		PRIMARY KEY (HotelId, RoomId)
+	);
+
+	INSERT INTO tmp_room_revenue
+	SELECT ml.HotelId, ml.RoomId,
+		SUM(
+			CASE
+				WHEN ml.EventType IN ('Deposit', 'FinalPayment', 'FullPayment', 'PenaltyRevenue') THEN COALESCE(ml.DebitAmount, 0)
+				WHEN ml.EventType = 'RefundPayout' THEN -COALESCE(ml.CreditAmount, 0)
+				ELSE COALESCE(ml.DebitAmount, 0) - COALESCE(ml.CreditAmount, 0)
+			END
+		) AS NetRevenue
+	FROM tmp_mapped_ledger ml
+	GROUP BY ml.HotelId, ml.RoomId;
+
+	SELECT ranked.HotelId, ranked.RoomId, r.RoomType, ranked.NetRevenue, ranked.RevenueRank
+	FROM (
+		SELECT rr.HotelId, rr.RoomId, rr.NetRevenue, DENSE_RANK() OVER (ORDER BY rr.NetRevenue DESC) AS RevenueRank
+		FROM tmp_room_revenue rr
+	) ranked
+	INNER JOIN Room r ON r.RoomId = ranked.RoomId
+	WHERE ranked.RevenueRank <= 3
+	ORDER BY ranked.RevenueRank, ranked.NetRevenue DESC, ranked.RoomId;
+
+	DROP TEMPORARY TABLE IF EXISTS tmp_mapped_ledger;
+	DROP TEMPORARY TABLE IF EXISTS tmp_room_revenue;
+END$$
+
+CREATE  PROCEDURE `sp_ProcessCheckIn` (IN `p_ReservationId` VARCHAR(255))   BEGIN
+	DECLARE v_ResStatus VARCHAR(50);
+	DECLARE v_RoomId VARCHAR(255);
+	DECLARE v_CurrentPrice DECIMAL(18,2);
+	DECLARE v_CheckInDate DATETIME;
+	DECLARE v_CheckOutDate DATETIME;
+	DECLARE v_TotalPrice DECIMAL(18,2);
+	DECLARE v_PaidAmount DECIMAL(18,2);
+	DECLARE v_RemainingAmount DECIMAL(18,2);
+	DECLARE v_PaymentId VARCHAR(10);
+	DECLARE v_PaymentSeq BIGINT;
+
+	DECLARE EXIT HANDLER FOR SQLEXCEPTION
+	BEGIN
+		ROLLBACK;
+		SELECT 'HTTP 500: Lỗi hệ thống khi thanh toán.' AS Message;
+	END;
+
+	START TRANSACTION;
+	SELECT RoomId, CheckInDate, CheckOutDate, Status INTO v_RoomId, v_CheckInDate, v_CheckOutDate, v_ResStatus
+	FROM Reservation WHERE ReservationId = p_ReservationId COLLATE utf8mb4_general_ci FOR UPDATE;
+
+	IF v_ResStatus IS NULL THEN
+		ROLLBACK;
+		SELECT 'HTTP 404: Không tìm thấy đơn.' AS Message;
+	ELSEIF v_ResStatus COLLATE utf8mb4_general_ci <> 'Confirmed' THEN
+		ROLLBACK;
+		SELECT 'HTTP 400: Trạng thái đơn không hợp lệ.' AS Message;
+	ELSE
+		SELECT CurrentPrice INTO v_CurrentPrice FROM Room WHERE RoomId = v_RoomId COLLATE utf8mb4_general_ci;
+		SET v_TotalPrice = v_CurrentPrice * DATEDIFF(v_CheckOutDate, v_CheckInDate);
+
+		SELECT IFNULL(SUM(Amount), 0) INTO v_PaidAmount FROM Payment
+		WHERE ReservationId = p_ReservationId COLLATE utf8mb4_general_ci AND Status = 'Completed';
+
+		SET v_RemainingAmount = v_TotalPrice - v_PaidAmount;
+
+		IF v_RemainingAmount > 0 THEN
+			SELECT LastNumber INTO v_PaymentSeq FROM IdSequence WHERE SequenceName = 'Payment' FOR UPDATE;
+			SET v_PaymentSeq = v_PaymentSeq + 1;
+			UPDATE IdSequence SET LastNumber = v_PaymentSeq WHERE SequenceName = 'Payment';
+			SET v_PaymentId = CONCAT('PMT', LPAD(v_PaymentSeq, 7, '0'));
+
+			INSERT INTO Payment (PaymentId, ReservationId, PaymentType, Amount, PaymentDate, Status)
+			VALUES (v_PaymentId, p_ReservationId, 'FinalPayment', v_RemainingAmount, NOW(), 'Completed');
+		END IF;
+
+		UPDATE Reservation SET Status = 'CheckedIn' WHERE ReservationId = p_ReservationId COLLATE utf8mb4_general_ci;
+		COMMIT;
+		SELECT 'HTTP 200: Check-in thành công!' AS Message, v_RemainingAmount AS AmountCollected;
+	END IF;
+END$$
+
+CREATE  PROCEDURE `sp_ProcessCheckOut` (IN `p_ReservationId` VARCHAR(255))   BEGIN
+    DECLARE v_ResStatus VARCHAR(50);
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        SELECT 'HTTP 500: Lỗi hệ thống khi trả phòng.' AS Message;
+    END;
+
+    START TRANSACTION;
+    SELECT Status INTO v_ResStatus FROM Reservation WHERE ReservationId = p_ReservationId COLLATE utf8mb4_general_ci FOR UPDATE;
+
+    IF v_ResStatus IS NULL THEN
+        ROLLBACK;
+        SELECT 'HTTP 404: Không tìm thấy đơn.' AS Message;
+    ELSEIF v_ResStatus COLLATE utf8mb4_general_ci <> 'CheckedIn' THEN
+        ROLLBACK;
+        SELECT 'HTTP 400: Chỉ đơn CheckedIn mới được trả phòng.' AS Message;
+    ELSE
+        UPDATE Reservation SET Status = 'Completed' WHERE ReservationId = p_ReservationId COLLATE utf8mb4_general_ci;
+        COMMIT;
+        SELECT 'HTTP 200: Trả phòng thành công!' AS Message;
+    END IF;
+END$$
+
+CREATE  PROCEDURE `sp_SearchAvailableRooms` (IN `p_CheckIn` DATETIME, IN `p_CheckOut` DATETIME, IN `p_MaxPrice` DECIMAL(15,2), IN `p_RoomType` VARCHAR(100))   BEGIN
+		SELECT 
+			r.HotelId,
+			r.RoomId,
+			r.RoomType,
+			r.CurrentPrice
+		FROM Room r
+		WHERE r.Status = 1
+			AND (p_MaxPrice IS NULL OR r.CurrentPrice <= p_MaxPrice)
+			AND (p_RoomType IS NULL OR p_RoomType = '' OR r.RoomType = p_RoomType)
+			AND fn_CheckRoomAvailability(r.RoomId, p_CheckIn, p_CheckOut) = TRUE;
+END$$
+
+--
+-- Các hàm
+--
+CREATE  FUNCTION `fn_CheckRoomAvailability` (`p_RoomId` VARCHAR(255), `p_CheckIn` DATETIME, `p_CheckOut` DATETIME) RETURNS TINYINT(1) DETERMINISTIC BEGIN
+	DECLARE v_IsBusy INT;
+	SELECT COUNT(*) INTO v_IsBusy
+	FROM Reservation
+	WHERE RoomId = p_RoomId
+	  AND Status IN ('Confirmed', 'CheckedIn')
+	  AND p_CheckIn < CheckOutDate 
+	  AND p_CheckOut > CheckInDate;
+
+	IF v_IsBusy > 0 THEN
+		RETURN FALSE;
+	ELSE
+		RETURN TRUE;
+	END IF;
+END$$
+
+DELIMITER ;
+
+-- --------------------------------------------------------
+
+--
+-- Cấu trúc bảng cho bảng `financialledger`
+--
+
+CREATE TABLE `financialledger` (
+    `LedgerId` varchar(10) NOT NULL PRIMARY KEY,
+    `ReferenceId` varchar(10) NOT NULL,
+    `EventType` varchar(50) NOT NULL,
+    `DebitAmount` decimal(18, 2) DEFAULT NULL,
+    `CreditAmount` decimal(18, 2) DEFAULT NULL,
+    `Date` datetime DEFAULT current_timestamp()
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci;
+
+--
+-- Đang đổ dữ liệu cho bảng `financialledger`
+--
+
+INSERT INTO
+    `financialledger` (
+        `LedgerId`,
+        `ReferenceId`,
+        `EventType`,
+        `DebitAmount`,
+        `CreditAmount`,
+        `Date`
+    )
+VALUES (
+        '2a3bfebd61',
+        '2a3bfb0161',
+        'PenaltyRevenue',
+        850000.00,
+        0.00,
+        '2026-06-06 22:55:39'
+    );
+
+-- --------------------------------------------------------
+
+--
+-- Cấu trúc bảng cho bảng `hotel`
+--
+
+CREATE TABLE `hotel` (
+    `HotelId` varchar(24) NOT NULL PRIMARY KEY,
+    `Status` tinyint(1) DEFAULT 1
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci;
+
+--
+-- Đang đổ dữ liệu cho bảng `hotel`
+--
+
+INSERT INTO
+    `hotel` (`HotelId`, `Status`)
+VALUES ('6a1b17ae827c164fb9e7f9f4', 1),
+    ('6a1b17ae827c164fb9e7f9f6', 1),
+    ('6a1b17ae827c164fb9e7f9f8', 1);
+
+-- --------------------------------------------------------
+
+--
+-- Cấu trúc bảng cho bảng `idsequence`
+--
+
+CREATE TABLE `idsequence` (
+    `SequenceName` varchar(30) NOT NULL PRIMARY KEY,
+    `LastNumber` bigint(20) NOT NULL DEFAULT 0
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci;
+
+--
+-- Đang đổ dữ liệu cho bảng `idsequence`
+--
+
+INSERT INTO
+    `idsequence` (`SequenceName`, `LastNumber`)
+VALUES ('Payment', 2),
+    ('Reservation', 2);
+
+-- --------------------------------------------------------
+
+--
+-- Cấu trúc bảng cho bảng `payment`
+--
+
+CREATE TABLE `payment` (
+    `PaymentId` varchar(10) NOT NULL PRIMARY KEY,
+    `ReservationId` varchar(10) NOT NULL,
+    `PaymentType` varchar(50) NOT NULL,
+    `Amount` decimal(18, 2) NOT NULL,
+    `PaymentDate` datetime DEFAULT current_timestamp(),
+    `Status` varchar(50) DEFAULT 'Pending'
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci;
+
+--
+-- Đang đổ dữ liệu cho bảng `payment`
+--
+
+INSERT INTO
+    `payment` (
+        `PaymentId`,
+        `ReservationId`,
+        `PaymentType`,
+        `Amount`,
+        `PaymentDate`,
+        `Status`
+    )
+VALUES (
+        'PMT0000001',
+        'RSV0000001',
+        'FullPayment',
+        850000.00,
+        '2026-06-02 01:09:43',
+        'Completed'
+    ),
+    (
+        'PMT0000002',
+        'RSV0000002',
+        'FullPayment',
+        850000.00,
+        '2026-06-06 22:55:29',
+        'Completed'
+    );
+
+--
+-- Bẫy `payment`
+--
+DELIMITER $$
+
+CREATE TRIGGER `TRG_AutoLog_Payment` AFTER INSERT ON `payment` FOR EACH ROW BEGIN
+	DECLARE v_event_type VARCHAR(50);
+	SET v_event_type = CASE UPPER(TRIM(COALESCE(NEW.PaymentType, '')))
+		WHEN 'DEPOSIT' THEN 'Deposit'
+		WHEN 'FINALPAYMENT' THEN 'FinalPayment'
+		WHEN 'FULLPAYMENT' THEN 'FullPayment'
+		ELSE 'FullPayment'
+	END;
+
+	IF UPPER(TRIM(COALESCE(NEW.Status, ''))) = 'COMPLETED' THEN
+		INSERT INTO FinancialLedger (LedgerId, ReferenceId, EventType, DebitAmount, CreditAmount, Date)
+		VALUES (SUBSTRING(REPLACE(UUID(), '-', ''), 1, 10), NEW.PaymentId, v_event_type, NEW.Amount, 0, COALESCE(NEW.PaymentDate, CURRENT_TIMESTAMP));
+	END IF;
+END
+$$
+
+DELIMITER ;
+
+-- --------------------------------------------------------
+
+--
+-- Cấu trúc bảng cho bảng `pricechangelog`
+--
+
+CREATE TABLE `pricechangelog` (
+    `LogId` varchar(10) NOT NULL PRIMARY KEY,
+    `RoomId` varchar(10) NOT NULL,
+    `OldPrice` decimal(18, 2) DEFAULT NULL,
+    `NewPrice` decimal(18, 2) DEFAULT NULL,
+    `ChangedAt` datetime DEFAULT current_timestamp()
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Cấu trúc bảng cho bảng `refund`
+--
+
+CREATE TABLE `refund` (
+    `RefundId` varchar(10) NOT NULL PRIMARY KEY,
+    `ReservationId` varchar(10) NOT NULL,
+    `RefundAmount` decimal(18, 2) DEFAULT NULL,
+    `PenaltyAmount` decimal(18, 2) DEFAULT NULL,
+    `ProcessedAt` datetime DEFAULT current_timestamp()
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci;
+
+--
+-- Đang đổ dữ liệu cho bảng `refund`
+--
+
+INSERT INTO
+    `refund` (
+        `RefundId`,
+        `ReservationId`,
+        `RefundAmount`,
+        `PenaltyAmount`,
+        `ProcessedAt`
+    )
+VALUES (
+        '2a3bfb0161',
+        'RSV0000002',
+        0.00,
+        850000.00,
+        '2026-06-06 22:55:39'
+    );
+
+--
+-- Bẫy `refund`
+--
+DELIMITER $$
+
+CREATE TRIGGER `TRG_AutoLog_Refund` AFTER INSERT ON `refund` FOR EACH ROW BEGIN
+	IF COALESCE(NEW.RefundAmount, 0) > 0 THEN
+		INSERT INTO FinancialLedger (LedgerId, ReferenceId, EventType, DebitAmount, CreditAmount, Date)
+		VALUES (SUBSTRING(REPLACE(UUID(), '-', ''), 1, 10), NEW.RefundId, 'RefundPayout', 0, NEW.RefundAmount, COALESCE(NEW.ProcessedAt, CURRENT_TIMESTAMP));
+	END IF;
+
+	IF COALESCE(NEW.PenaltyAmount, 0) > 0 THEN
+		INSERT INTO FinancialLedger (LedgerId, ReferenceId, EventType, DebitAmount, CreditAmount, Date)
+		VALUES (SUBSTRING(REPLACE(UUID(), '-', ''), 1, 10), NEW.RefundId, 'PenaltyRevenue', NEW.PenaltyAmount, 0, COALESCE(NEW.ProcessedAt, CURRENT_TIMESTAMP));
+	END IF;
+END
+$$
+
+DELIMITER ;
+
+-- --------------------------------------------------------
+
+--
+-- Cấu trúc bảng cho bảng `reservation`
+--
+
+CREATE TABLE `reservation` (
+    `ReservationId` varchar(10) NOT NULL PRIMARY KEY,
+    `RoomId` varchar(10) NOT NULL,
+    `UserId` varchar(10) DEFAULT NULL,
+    `CheckInDate` datetime NOT NULL,
+    `CheckOutDate` datetime NOT NULL,
+    `Status` varchar(20) DEFAULT 'Pending'
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci;
+
+--
+-- Đang đổ dữ liệu cho bảng `reservation`
+--
+
+INSERT INTO
+    `reservation` (
+        `ReservationId`,
+        `RoomId`,
+        `UserId`,
+        `CheckInDate`,
+        `CheckOutDate`,
+        `Status`
+    )
+VALUES (
+        'RSV0000001',
+        'R101',
+        'US00000004',
+        '2026-06-02 00:00:00',
+        '2026-06-03 00:00:00',
+        'Completed'
+    ),
+    (
+        'RSV0000002',
+        'R101',
+        'US00000004',
+        '2026-06-06 00:00:00',
+        '2026-06-07 00:00:00',
+        'Cancelled'
+    );
+
+-- --------------------------------------------------------
+
+--
+-- Cấu trúc bảng cho bảng `room`
+--
+
+CREATE TABLE `room` (
+    `RoomId` varchar(10) NOT NULL PRIMARY KEY,
+    `HotelId` varchar(24) NOT NULL,
+    `RoomType` varchar(100) DEFAULT NULL,
+    `BasePrice` decimal(18, 2) NOT NULL,
+    `CurrentPrice` decimal(18, 2) DEFAULT NULL,
+    `Status` tinyint(1) DEFAULT 1
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci;
+
+--
+-- Đang đổ dữ liệu cho bảng `room`
+--
+
+INSERT INTO
+    `room` (
+        `RoomId`,
+        `HotelId`,
+        `RoomType`,
+        `BasePrice`,
+        `CurrentPrice`,
+        `Status`
+    )
+VALUES (
+        'R101',
+        '6a1b17ae827c164fb9e7f9f4',
+        'Standard',
+        850000.00,
+        850000.00,
+        1
+    ),
+    (
+        'R102',
+        '6a1b17ae827c164fb9e7f9f4',
+        'Deluxe',
+        1500000.00,
+        1500000.00,
+        1
+    ),
+    (
+        'R103',
+        '6a1b17ae827c164fb9e7f9f4',
+        'Suite',
+        3200000.00,
+        3200000.00,
+        1
+    ),
+    (
+        'R201',
+        '6a1b17ae827c164fb9e7f9f6',
+        'Standard',
+        850000.00,
+        850000.00,
+        1
+    ),
+    (
+        'R202',
+        '6a1b17ae827c164fb9e7f9f6',
+        'Deluxe',
+        1500000.00,
+        1500000.00,
+        1
+    ),
+    (
+        'R203',
+        '6a1b17ae827c164fb9e7f9f6',
+        'Suite',
+        3200000.00,
+        3200000.00,
+        1
+    ),
+    (
+        'R301',
+        '6a1b17ae827c164fb9e7f9f8',
+        'Standard',
+        850000.00,
+        850000.00,
+        1
+    ),
+    (
+        'R302',
+        '6a1b17ae827c164fb9e7f9f8',
+        'Deluxe',
+        1500000.00,
+        1500000.00,
+        1
+    ),
+    (
+        'R303',
+        '6a1b17ae827c164fb9e7f9f8',
+        'Suite',
+        3200000.00,
+        3200000.00,
+        1
+    );
+
+--
+-- Bẫy `room`
+--
+DELIMITER $$
+
+CREATE TRIGGER `TRG_AuditPriceChange` AFTER UPDATE ON `room` FOR EACH ROW BEGIN
+	IF NEW.CurrentPrice IS NOT NULL
+		 AND (OLD.CurrentPrice IS NULL OR NEW.CurrentPrice <> OLD.CurrentPrice)
+		 AND NEW.BasePrice > 0
+		 AND ABS(NEW.CurrentPrice - NEW.BasePrice) / NEW.BasePrice > 0.5 THEN
+		INSERT INTO PriceChangeLog (LogId, RoomId, OldPrice, NewPrice, ChangedAt)
+		VALUES (SUBSTRING(REPLACE(UUID(), '-', ''), 1, 10), NEW.RoomId, OLD.CurrentPrice, NEW.CurrentPrice, CURRENT_TIMESTAMP);
+	END IF;
+END
+$$
+
+DELIMITER ;
+
+-- --------------------------------------------------------
+
+--
+-- Cấu trúc bảng cho bảng `user`
+--
+
+CREATE TABLE `user` (
+    `UserId` varchar(10) NOT NULL PRIMARY KEY,
+    `FullName` varchar(255) NOT NULL,
+    `Email` varchar(255) NOT NULL,
+    `Password` varchar(255) NOT NULL,
+    `Role` varchar(50) DEFAULT 'Customer'
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci;
+
+--
+-- Đang đổ dữ liệu cho bảng `user`
+--
+
+INSERT INTO
+    `user` (
+        `UserId`,
+        `FullName`,
+        `Email`,
+        `Password`,
+        `Role`
+    )
+VALUES (
+        'AD00000001',
+        'Admin DaVinci',
+        'admin@davinci.com',
+        'admin123',
+        'Admin'
+    ),
+    (
+        'US00000001',
+        'Nguyen Van A',
+        'demo1@davinci.com',
+        '123456',
+        'Customer'
+    ),
+    (
+        'US00000004',
+        'Nguyễn Văn A',
+        'kientrucdichvu123@gmail.com',
+        '$2a$10$.s88ax3BUAZhsufYRF259uKc1hiIgU53BtqyhxceCEz/zKpsvNEFe',
+        'Customer'
+    );
+
+--
+-- Chỉ mục cho các bảng đã đổ
+--
+
+--
+-- Chỉ mục cho bảng `financialledger`
+--
+ALTER TABLE `financialledger`
+ADD KEY `idx_Ledger_ReferenceId` (`ReferenceId`);
+
+--
+-- Chỉ mục cho bảng `hotel`
+--
+
+--
+-- Chỉ mục cho bảng `idsequence`
+--
+
+--
+-- Chỉ mục cho bảng `payment`
+--
+ALTER TABLE `payment`
+ADD KEY `idx_Payment_ReservationId` (`ReservationId`);
+
+--
+-- Chỉ mục cho bảng `pricechangelog`
+--
+ALTER TABLE `pricechangelog`
+ADD KEY `idx_PriceChangeLog_RoomId` (`RoomId`);
+
+--
+-- Chỉ mục cho bảng `refund`
+--
+ALTER TABLE `refund`
+ADD KEY `idx_Refund_ReservationId` (`ReservationId`);
+
+--
+-- Chỉ mục cho bảng `reservation`
+--
+ALTER TABLE `reservation`
+ADD KEY `idx_Reservation_RoomId` (`RoomId`),
+ADD KEY `idx_Reservation_UserId` (`UserId`),
+ADD KEY `idx_Reservation_Status` (`Status`);
+
+--
+-- Chỉ mục cho bảng `room`
+--
+ALTER TABLE `room`
+ADD KEY `idx_Room_HotelId` (`HotelId`);
+
+--
+-- Chỉ mục cho bảng `user`
+--
+ALTER TABLE `user`
+ADD UNIQUE KEY `Email` (`Email`);
+
+--
+-- Các ràng buộc cho các bảng đã đổ
+--
+
+--
+-- Các ràng buộc cho bảng `payment`
+--
+ALTER TABLE `payment`
+ADD CONSTRAINT `fk_Payment_Reservation` FOREIGN KEY (`ReservationId`) REFERENCES `reservation` (`ReservationId`);
+
+--
+-- Các ràng buộc cho bảng `pricechangelog`
+--
+ALTER TABLE `pricechangelog`
+ADD CONSTRAINT `fk_PriceChangeLog_Room` FOREIGN KEY (`RoomId`) REFERENCES `room` (`RoomId`);
+
+--
+-- Các ràng buộc cho bảng `refund`
+--
+ALTER TABLE `refund`
+ADD CONSTRAINT `fk_Refund_Reservation` FOREIGN KEY (`ReservationId`) REFERENCES `reservation` (`ReservationId`);
+
+--
+-- Các ràng buộc cho bảng `reservation`
+--
+ALTER TABLE `reservation`
+ADD CONSTRAINT `fk_Reservation_Room` FOREIGN KEY (`RoomId`) REFERENCES `room` (`RoomId`);
+
+--
+-- Các ràng buộc cho bảng `room`
+--
+ALTER TABLE `room`
+ADD CONSTRAINT `fk_Hotel_Room` FOREIGN KEY (`HotelId`) REFERENCES `hotel` (`HotelId`);
+
+COMMIT;
+
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */
+;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */
+;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */
+;
