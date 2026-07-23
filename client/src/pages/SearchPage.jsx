@@ -200,7 +200,7 @@ const SearchPage = () => {
                                     {/* Hotel Image */}
                                     <div className="relative w-full md:w-72 h-64 md:h-auto overflow-hidden shrink-0 bg-slate-100">
                                         <img 
-                                            src="https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" 
+                                            src={hotel.Images && hotel.Images.length > 0 ? hotel.Images[0] : "https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80"} 
                                             alt={hotel.Name} 
                                             className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                                         />

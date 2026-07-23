@@ -168,7 +168,7 @@ export default function HotelDetailPage() {
     const roomList = useMemo(() => availableRooms, [availableRooms]);
     const amenities = useMemo(() => parseAmenities(hotel?.Amenities), [hotel?.Amenities]);
     const coverImages = useMemo(() => {
-        return [hotel?.Images?.[0], ...demoGallery].filter(Boolean);
+        return hotel?.Images?.length ? hotel.Images : demoGallery;
     }, [hotel?.Images]);
 
     return (
