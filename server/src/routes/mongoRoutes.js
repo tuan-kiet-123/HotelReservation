@@ -7,6 +7,7 @@ const { protect, authorize } = require("../middlewares/authMiddleware");
 const router = express.Router();
 
 router.get("/hotels", hotelController.getHotels);
+router.post("/hotels/seed", hotelController.seedHotels);
 router.post("/hotels", protect, authorize("Admin"), hotelController.createHotel);
 router.get("/hotels/suggestions", hotelController.getHotelSuggestions);
 router.get("/hotels/:id", hotelController.getHotelById);
