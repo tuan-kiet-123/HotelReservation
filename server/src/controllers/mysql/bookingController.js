@@ -1,5 +1,7 @@
 const bookingService = require("../../services/mysql/bookingService");
 const { success, fail } = require("../../utils/apiResponse");
+const { pool } = require("../../config/mysql");
+const mailer = require("../../utils/mailer");
 
 function isValidDateTime(value) {
   if (typeof value !== "string") {
@@ -45,6 +47,37 @@ async function bookRoom(req, res, next) {
 
     if (result.statusCode >= 400) {
       return fail(res, result.message, result.statusCode, result.data);
+    }
+
+    // Nếu đặt phòng thành công, gửi email xác nhận
+    if (result.statusCode === 200 || result.statusCode === 201) {
+      try {
+        const [rows] = await pool.query(
+          `SELECT u.Email, u.FullName, h.Name AS HotelName, r.RoomType, DATE_FORMAT(res.CheckInDate, '%d/%m/%Y') AS CheckIn, DATE_FORMAT(res.CheckOutDate, '%d/%m/%Y') AS CheckOut 
+           FROM Reservation res
+           JOIN User u ON res.UserId = u.UserId COLLATE utf8mb4_general_ci
+           JOIN Room r ON res.RoomId = r.RoomId COLLATE utf8mb4_general_ci
+           JOIN Hotel h ON r.HotelId = h.HotelId COLLATE utf8mb4_general_ci
+           WHERE res.ReservationId = ? COLLATE utf8mb4_general_ci`,
+          [result.data.reservationId]
+        );
+
+        if (rows && rows.length > 0) {
+          const info = rows[0];
+          await mailer.sendBookingConfirmationEmail(
+            info.Email,
+            info.FullName,
+            info.HotelName,
+            info.CheckIn,
+            info.CheckOut,
+            info.RoomType,
+            result.data.amountPaid
+          );
+        }
+      } catch (mailError) {
+        console.error("Lỗi khi query và gửi email xác nhận đặt phòng:", mailError);
+        // Không block tiến trình trả về nếu email bị lỗi
+      }
     }
 
     return success(res, result.data, result.message, result.statusCode);

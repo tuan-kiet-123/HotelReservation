@@ -30,6 +30,7 @@ function LinkItem({ to, label, onClick }) {
 export default function SiteShell({ children }) {
     const [mobileOpen, setMobileOpen] = useState(false);
     const [authOpen, setAuthOpen] = useState(false);
+    const [authView, setAuthView] = useState('login');
     const { currentUser, logout } = useAuth();
 
     return (
@@ -57,13 +58,13 @@ export default function SiteShell({ children }) {
                         {!currentUser ? (
                             <>
                                 <button 
-                                    onClick={() => setAuthOpen(true)}
+                                    onClick={() => { setAuthView('login'); setAuthOpen(true); }}
                                     className="px-5 py-2.5 text-sm font-bold text-slate-600 hover:text-[#2EC4B6] transition-colors cursor-pointer"
                                 >
                                     Đăng nhập
                                 </button>
                                 <button 
-                                    onClick={() => setAuthOpen(true)}
+                                    onClick={() => { setAuthView('register'); setAuthOpen(true); }}
                                     className="px-6 py-2.5 text-sm font-bold bg-[#FF6F61] text-white rounded-full hover:bg-[#FF5A4A] transition-all shadow-md shadow-[#FF6F61]/20 cursor-pointer"
                                 >
                                     Đăng ký
@@ -109,7 +110,7 @@ export default function SiteShell({ children }) {
                         ))}
                         <div className="h-px bg-slate-100 my-2"></div>
                         {!currentUser ? (
-                            <button onClick={() => { setAuthOpen(true); setMobileOpen(false); }} className="w-full py-3 bg-[#FF6F61] text-white font-bold rounded-xl shadow-md">
+                            <button onClick={() => { setAuthView('login'); setAuthOpen(true); setMobileOpen(false); }} className="w-full py-3 bg-[#FF6F61] text-white font-bold rounded-xl shadow-md">
                                 Đăng nhập / Đăng ký
                             </button>
                         ) : (
@@ -205,7 +206,7 @@ export default function SiteShell({ children }) {
             </footer>
 
             {/* Auth Modal */}
-            <AuthModal isOpen={authOpen} onClose={() => setAuthOpen(false)} />
+            <AuthModal isOpen={authOpen} onClose={() => setAuthOpen(false)} defaultView={authView} />
         </div>
     );
 }

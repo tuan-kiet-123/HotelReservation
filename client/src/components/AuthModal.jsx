@@ -3,8 +3,12 @@ import { X, Mail, Lock, User as UserIcon, Loader2 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { toast } from 'sonner';
 
-export default function AuthModal({ isOpen, onClose }) {
-    const [view, setView] = useState('login'); // 'login' | 'register' | 'verify-register' | 'forgot' | 'reset'
+export default function AuthModal({ isOpen, onClose, defaultView = 'login' }) {
+    const [view, setView] = useState(defaultView); // 'login' | 'register' | 'verify-register' | 'forgot' | 'reset'
+
+    React.useEffect(() => {
+        if (isOpen) setView(defaultView);
+    }, [isOpen, defaultView]);
     const { login, register, verifyOtp, forgotPassword, resetPassword } = useAuth();
     
     const [fullName, setFullName] = useState("");
