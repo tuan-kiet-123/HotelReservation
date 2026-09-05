@@ -114,7 +114,7 @@ exports.sendBookingConfirmationEmail = async (email, fullName, hotelName, checkI
             `,
         });
 
-        console.log(\`📩 Booking Confirmation Sent to \${email}! Preview URL: %s\`, nodemailer.getTestMessageUrl(info));
+        console.log(`📩 Booking Confirmation Sent to ${email}! Preview URL: %s`, nodemailer.getTestMessageUrl(info));
         return true;
     } catch (error) {
         console.error("Lỗi gửi email xác nhận đặt phòng:", error);
